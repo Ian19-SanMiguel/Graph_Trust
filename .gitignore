@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python / AI Engine ignores
+ai-engine/__pycache__/
+ai-engine/venv/
+ai-engine/env/
+*.pyc
+.pytest_cache/
+graphtrust_model.pkl
