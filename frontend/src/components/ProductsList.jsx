@@ -59,8 +59,9 @@ const ProductsList = () => {
 									<div className='flex-shrink-0 h-10 w-10'>
 										<img
 											className='h-10 w-10 rounded-full object-cover'
-											src={product.image}
+											src={product.image || `https://source.unsplash.com/100x100/?${encodeURIComponent(product.category)}`}
 											alt={product.name}
+											onError={(e) => (e.currentTarget.src = `https://source.unsplash.com/100x100/?${encodeURIComponent(product.category)}`)}
 										/>
 									</div>
 									<div className='ml-4'>

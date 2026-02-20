@@ -19,7 +19,10 @@ export const validateCoupon = async (req, res) => {
 			return res.status(404).json({ message: "Coupon not found" });
 		}
 
-		if (coupon.expirationDate < new Date()) {
+		const expirationDate = new Date(coupon.expirationDate);
+		const currentDate = new Date();
+
+		if (expirationDate < currentDate) {
 			coupon.isActive = false;
 			await coupon.save();
 			return res.status(404).json({ message: "Coupon expired" });

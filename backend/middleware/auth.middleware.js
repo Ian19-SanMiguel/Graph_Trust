@@ -17,10 +17,12 @@ export const protectRoute = async (req, res, next) => {
 				return res.status(401).json({ message: "User not found" });
 			}
 
-			// Exclude password from user object
+			// Keep the user model instance on req.user for controllers that need to save
+			// but also provide a sanitized plain object on req.userSafe for responses
 			const userWithoutPassword = user.toJSON();
 			delete userWithoutPassword.password;
-			req.user = userWithoutPassword;
+			req.user = user; // model instance
+			req.userSafe = userWithoutPassword; // sanitized plain object
 
 			next();
 		} catch (error) {

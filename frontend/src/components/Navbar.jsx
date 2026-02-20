@@ -9,33 +9,50 @@ const Navbar = () => {
 	const { cart } = useCartStore();
 
 	return (
-		<header className='fixed top-0 left-0 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md shadow-lg z-40 transition-all duration-300 border-b border-emerald-800'>
+		<header className='fixed top-0 left-0 w-full bg-gray-900 bg-opacity-90 backdrop-blur-md shadow-lg z-40 transition-all duration-300 border-b' style={{ borderBottomColor: '#8F5BFF' }}>
 			<div className='container mx-auto px-4 py-3'>
 				<div className='flex flex-wrap justify-between items-center'>
-					<Link to='/' className='text-2xl font-bold text-emerald-400 items-center space-x-2 flex'>
+<Link to='/' className='text-2xl font-bold items-center space-x-2 flex' style={{ color: '#8F5BFF' }}>
 						E-Commerce
 					</Link>
 
 					<nav className='flex flex-wrap items-center gap-4'>
 						<Link
 							to={"/"}
-							className='text-gray-300 hover:text-emerald-400 transition duration-300
-					 ease-in-out'
+						className='text-gray-300 transition duration-300
+				 ease-in-out'
+						onMouseEnter={(e) => e.currentTarget.style.color = '#8F5BFF'}
+						onMouseLeave={(e) => e.currentTarget.style.color = 'rgb(209, 213, 219)'}
 						>
 							Home
 						</Link>
 						{user && (
 							<Link
-								to={"/cart"}
-								className='relative group text-gray-300 hover:text-emerald-400 transition duration-300 
-							ease-in-out'
+								to={"/verified-seller"}
+							className='text-gray-300 transition duration-300
+				 ease-in-out'
+							onMouseEnter={(e) => e.currentTarget.style.color = '#8F5BFF'}
+							onMouseLeave={(e) => e.currentTarget.style.color = 'rgb(209, 213, 219)'}
 							>
-								<ShoppingCart className='inline-block mr-1 group-hover:text-emerald-400' size={20} />
-								<span className='hidden sm:inline'>Cart</span>
-								{cart.length > 0 && (
-									<span
-										className='absolute -top-2 -left-2 bg-emerald-500 text-white rounded-full px-2 py-0.5 
-									text-xs group-hover:bg-emerald-400 transition duration-300 ease-in-out'
+								Be a Seller
+							</Link>
+						)}
+						{user && (
+							<Link
+								to={"/cart"}
+							className='relative group text-gray-300 transition duration-300 
+							ease-in-out'
+							style={{ '--hover-color': '#8F5BFF' }}
+							onMouseEnter={(e) => e.currentTarget.style.color = '#8F5BFF'}
+							onMouseLeave={(e) => e.currentTarget.style.color = 'rgb(209, 213, 219)'}
+						>
+							<ShoppingCart className='inline-block mr-1' size={20} style={{ color: 'inherit' }} />
+							<span className='hidden sm:inline'>Cart</span>
+							{cart.length > 0 && (
+								<span
+									className='absolute -top-2 -left-2 text-white rounded-full px-2 py-0.5 
+									text-xs transition duration-300 ease-in-out'
+									style={{ backgroundColor: '#8F5BFF' }}
 									>
 										{cart.length}
 									</span>
@@ -44,8 +61,11 @@ const Navbar = () => {
 						)}
 						{isAdmin && (
 							<Link
-								className='bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded-md font-medium
-								 transition duration-300 ease-in-out flex items-center'
+							className='text-white px-3 py-1 rounded-md font-medium
+							 transition duration-300 ease-in-out flex items-center'
+							style={{ backgroundColor: '#8F5BFF' }}
+							onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+							onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
 								to={"/secret-dashboard"}
 							>
 								<Lock className='inline-block mr-1' size={18} />
@@ -66,7 +86,7 @@ const Navbar = () => {
 							<>
 								<Link
 									to={"/signup"}
-									className='bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 
+									className='bg-accent-600 hover:bg-accent-700 text-white py-2 px-4 
 									rounded-md flex items-center transition duration-300 ease-in-out'
 								>
 									<UserPlus className='mr-2' size={18} />
