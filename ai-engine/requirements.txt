@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+networkx
+scikit-learn
+joblib
+numpy
+pydantic
+nest_asyncio
