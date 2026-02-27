@@ -1,32 +1,46 @@
-import { BarChart, PlusCircle, ShoppingBasket } from "lucide-react";
+import { BarChart, PlusCircle, ShieldCheck, ShoppingBasket } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 import AnalyticsTab from "../components/AnalyticsTab";
 import CreateProductForm from "../components/CreateProductForm";
 import ProductsList from "../components/ProductsList";
+import VerificationsTab from "../components/VerificationsTab";
 import { useProductStore } from "../stores/useProductStore";
-
-const tabs = [
-	{ id: "create", label: "Create Product", icon: PlusCircle },
-	{ id: "products", label: "Products", icon: ShoppingBasket },
-	{ id: "analytics", label: "Analytics", icon: BarChart },
-];
+import { useUserStore } from "../stores/useUserStore";
 
 const AdminPage = () => {
 	const [activeTab, setActiveTab] = useState("create");
-	const { fetchAllProducts } = useProductStore();
+	const { fetchAllProducts, fetchMyProducts } = useProductStore();
+	const { user } = useUserStore();
+	const isAdmin = user?.role === "admin";
+
+	const tabs = [
+		{ id: "create", label: "Create Product", icon: PlusCircle },
+		{ id: "products", label: "Products", icon: ShoppingBasket },
+		...(isAdmin
+			? [
+					{ id: "verifications", label: "Verifications", icon: ShieldCheck },
+					{ id: "analytics", label: "Analytics", icon: BarChart },
+			  ]
+			: []),
+	];
 	const [seeding, setSeeding] = useState(false);
 	const [seedResult, setSeedResult] = useState(null);
 
 	useEffect(() => {
-		fetchAllProducts();
-	}, [fetchAllProducts]);
+		if (isAdmin) {
+			fetchAllProducts();
+			return;
+		}
+
+		fetchMyProducts();
+	}, [fetchAllProducts, fetchMyProducts, isAdmin]);
 
 	return (
 		<div className='min-h-screen relative overflow-hidden'>
 			<div className='relative z-10 container mx-auto px-4 py-16'>
-				{process.env.NODE_ENV === "development" && (
+				{process.env.NODE_ENV === "development" && isAdmin && (
 					<div className='flex justify-center items-center mb-6 space-x-3'>
 						<button
 							className='bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-md'
@@ -77,7 +91,7 @@ const AdminPage = () => {
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.8 }}
 				>
-					Admin Dashboard
+					{isAdmin ? "Admin Dashboard" : "Seller Dashboard"}
 				</motion.h1>
 
 				<div className='flex justify-center mb-8'>
@@ -97,7 +111,8 @@ const AdminPage = () => {
 					))}
 				</div>
 				{activeTab === "create" && <CreateProductForm />}
-				{activeTab === "products" && <ProductsList />}
+				{activeTab === "products" && <ProductsList canToggleFeatured={isAdmin} />}
+				{activeTab === "verifications" && <VerificationsTab />}
 				{activeTab === "analytics" && <AnalyticsTab />}
 			</div>
 		</div>

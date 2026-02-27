@@ -11,6 +11,8 @@ export class Product {
 		this.price = data.price;
 		this.image = data.image;
 		this.category = data.category;
+		this.shopId = data.shopId || "";
+		this.shopName = data.shopName || "";
 		this.isFeatured = data.isFeatured || false;
 		this.createdAt = data.createdAt;
 		this.updatedAt = data.updatedAt;
@@ -25,6 +27,8 @@ export class Product {
 			price: this.price,
 			image: this.image,
 			category: this.category,
+			shopId: this.shopId,
+			shopName: this.shopName,
 			isFeatured: this.isFeatured,
 			createdAt: this.createdAt || serverTimestamp(),
 			updatedAt: serverTimestamp(),
@@ -40,6 +44,8 @@ export class Product {
 			price: this.price,
 			image: this.image,
 			category: this.category,
+			shopId: this.shopId,
+			shopName: this.shopName,
 			isFeatured: this.isFeatured,
 			createdAt: this.createdAt,
 			updatedAt: this.updatedAt,

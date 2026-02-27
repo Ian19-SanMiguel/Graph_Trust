@@ -52,19 +52,27 @@ const CONFIG = {
 
 const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
+const buildSeedShops = (count) =>
+    Array.from({ length: count }).map((_, index) => ({
+        shopId: `seed-shop-${index + 1}`,
+        shopName: `${faker.company.name().split(" ")[0]} Shop`,
+    }));
+
 const fillTemplate = (template, ctx) => {
     return template.replace(/\{(.*?)\}/g, (_, key) => ctx[key] ?? "");
 };
 
-export const seedProducts = async ({ perCategory = 12 } = {}) => {
+export const seedProducts = async ({ perCategory = 12, shopCount = 8 } = {}) => {
     await connectDB();
     const created = [];
+	const shops = buildSeedShops(Math.max(1, shopCount));
 
     for (const category of CATEGORIES) {
         const cfg = CONFIG[category];
         const [minPrice, maxPrice] = cfg.price;
 
         for (let i = 0; i < perCategory; i++) {
+			const shop = rand(shops);
             const brand = faker.company.name().split(' ')[0];
             const ctx = {
                 brand,
@@ -103,6 +111,8 @@ export const seedProducts = async ({ perCategory = 12 } = {}) => {
                 image,
                 category,
                 isFeatured,
+				shopId: shop.shopId,
+				shopName: shop.shopName,
             });
 
             created.push(product.toJSON());

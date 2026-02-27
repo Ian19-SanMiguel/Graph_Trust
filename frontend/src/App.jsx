@@ -7,6 +7,11 @@ import AdminPage from "./pages/AdminPage";
 import CategoryPage from "./pages/CategoryPage";
 import ProductPage from "./pages/ProductPage";
 import VerifiedSellerPage from "./pages/VerifiedSellerPage";
+import LearnWhatWeCollectPage from "./pages/LearnWhatWeCollectPage";
+import HowItWorksPage from "./pages/HowItWorksPage";
+import SettingsPage from "./pages/SettingsPage";
+import ShopPage from "./pages/ShopPage";
+import MessagesPage from "./pages/MessagesPage";
 
 import Navbar from "./components/Navbar";
 import { Toaster } from "react-hot-toast";
@@ -50,12 +55,17 @@ function App() {
 					<Route path='/login' element={!user ? <LoginPage /> : <Navigate to='/' />} />
 					<Route
 						path='/secret-dashboard'
-						element={user?.role === "admin" ? <AdminPage /> : <Navigate to='/login' />}
+						element={user?.role === "admin" || user?.role === "seller" ? <AdminPage /> : <Navigate to='/login' />}
 					/>
 					<Route path='/category/:category' element={<CategoryPage />} />
 					<Route path='/product/:id' element={<ProductPage />} />
 					<Route path='/cart' element={user ? <CartPage /> : <Navigate to='/login' />} />
 					<Route path='/verified-seller' element={<VerifiedSellerPage />} />
+					<Route path='/learn-what-we-collect' element={<LearnWhatWeCollectPage />} />
+					<Route path='/how-it-works' element={<HowItWorksPage />} />
+					<Route path='/settings' element={<SettingsPage />} />
+					<Route path='/shop/:shopId' element={<ShopPage />} />
+					<Route path='/messages' element={user ? <MessagesPage /> : <Navigate to='/login' />} />
 					<Route
 						path='/purchase-success'
 						element={user ? <PurchaseSuccessPage /> : <Navigate to='/login' />}

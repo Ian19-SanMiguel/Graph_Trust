@@ -12,6 +12,21 @@ export const getAllProducts = async (req, res) => {
 	}
 };
 
+export const getMyProducts = async (req, res) => {
+	try {
+		if (req.user?.role === "admin") {
+			const products = await Product.find({});
+			return res.json({ products: products.map((p) => p.toJSON()) });
+		}
+
+		const products = await Product.find({ shopId: String(req.user?._id || "") });
+		return res.json({ products: products.map((p) => p.toJSON()) });
+	} catch (error) {
+		console.log("Error in getMyProducts controller", error.message);
+		return res.status(500).json({ message: "Server error", error: error.message });
+	}
+};
+
 export const getFeaturedProducts = async (req, res) => {
 	try {
 		let featuredProducts = await redis.get("featured_products");
@@ -41,6 +56,8 @@ export const getFeaturedProducts = async (req, res) => {
 export const createProduct = async (req, res) => {
 	try {
 		const { name, description, price, image, category } = req.body;
+		const shopId = String(req.user?._id || "").trim();
+		const shopName = String(req.user?.name || "Shop").trim();
 
 		let cloudinaryResponse = null;
 
@@ -54,6 +71,8 @@ export const createProduct = async (req, res) => {
 			price,
 			image: cloudinaryResponse?.secure_url ? cloudinaryResponse.secure_url : "",
 			category,
+			shopId,
+			shopName,
 		});
 
 		res.status(201).json(product.toJSON());
@@ -69,6 +88,10 @@ export const deleteProduct = async (req, res) => {
 
 		if (!product) {
 			return res.status(404).json({ message: "Product not found" });
+		}
+
+		if (req.user?.role !== "admin" && product.shopId !== String(req.user?._id || "")) {
+			return res.status(403).json({ message: "Access denied - You can delete only your products" });
 		}
 
 		if (product.image) {
@@ -102,6 +125,8 @@ export const getRecommendedProducts = async (req, res) => {
 			description: product.description,
 			image: product.image,
 			price: product.price,
+			shopId: product.shopId || "",
+			shopName: product.shopName || "",
 		}));
 
 		res.json(result);
@@ -118,6 +143,28 @@ export const getProductsByCategory = async (req, res) => {
 		res.json({ products: products.map((p) => p.toJSON()) });
 	} catch (error) {
 		console.log("Error in getProductsByCategory controller", error.message);
+		res.status(500).json({ message: "Server error", error: error.message });
+	}
+};
+
+export const getProductsByShop = async (req, res) => {
+	const { shopId } = req.params;
+
+	try {
+		const products = await Product.find({ shopId });
+		const serializedProducts = products.map((product) => product.toJSON());
+
+		const shopNameFromProducts = serializedProducts.find((product) => product.shopName)?.shopName || "Shop";
+
+		res.json({
+			shop: {
+				shopId,
+				shopName: shopNameFromProducts,
+			},
+			products: serializedProducts,
+		});
+	} catch (error) {
+		console.log("Error in getProductsByShop controller", error.message);
 		res.status(500).json({ message: "Server error", error: error.message });
 	}
 };

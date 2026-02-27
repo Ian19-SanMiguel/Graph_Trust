@@ -37,6 +37,19 @@ const ProductCard = ({ product }) => {
 
 			<div className='mt-4 px-5 pb-5'>
 				<h5 className='text-xl font-semibold tracking-tight text-white'>{product.name}</h5>
+				<button
+					type='button'
+					onClick={(e) => {
+						e.stopPropagation();
+						if (product.shopId) {
+							navigate(`/shop/${product.shopId}`);
+						}
+					}}
+					className='mt-1 text-sm text-accent-300 hover:text-accent-200 disabled:text-gray-400 disabled:cursor-default'
+					disabled={!product.shopId}
+				>
+					{product.shopName || "Shop"}
+				</button>
 				<div className='mt-2 mb-5 flex items-center justify-between'>
 					<p>
 						<span className='text-3xl font-bold text-accent-400'>${product.price}</span>
