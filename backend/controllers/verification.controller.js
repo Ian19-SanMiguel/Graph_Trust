@@ -2,6 +2,7 @@ import cloudinary from "../lib/cloudinary.js";
 import Verification from "../models/verification.model.js";
 import User from "../models/user.model.js";
 import { serverTimestamp } from "firebase/firestore";
+import axios from "axios";
 
 const requiredFields = [
 	"firstName",
@@ -19,17 +20,10 @@ const isDataUrl = (value) => typeof value === "string" && value.startsWith("data
 export const submitVerification = async (req, res) => {
 	try {
 		const {
-			firstName,
-			middleName,
-			lastName,
-			suffix,
-			dateOfBirth,
-			sex,
-			nationality,
-			address,
-			contactNumber,
-			governmentIdImage,
-			selfieImage,
+			firstName, middleName, lastName, suffix, dateOfBirth,
+			sex, nationality, address, contactNumber,
+			governmentIdImage, selfieImage,
+            deviceId 
 		} = req.body;
 
 		for (const field of requiredFields) {
@@ -51,11 +45,48 @@ export const submitVerification = async (req, res) => {
 			return res.status(409).json({ message: "Your account is already verified" });
 		}
 
+        
 		const [governmentIdUpload, selfieUpload] = await Promise.all([
 			cloudinary.uploader.upload(governmentIdImage, { folder: "verifications/government-ids" }),
 			cloudinary.uploader.upload(selfieImage, { folder: "verifications/selfies" }),
 		]);
 
+        let aiTrustScore = 0.0;
+        let finalStatus = "pending"; 
+
+        try {
+            
+            const aiResponse = await axios.post("http://localhost:8000/kyc/upload", {
+                user_id: String(req.user._id),
+                doc_url: governmentIdUpload.secure_url,
+                selfie_url: selfieUpload.secure_url
+            });
+
+            aiTrustScore = aiResponse.data.trust_score;
+            
+            
+            if (aiResponse.data.kyc_status === "Verified") {
+                finalStatus = "approved";
+            }
+
+            
+            const user = await User.findById(req.user._id);
+            if (user) {
+                user.trustScore = aiTrustScore;
+                user.kycStatus = aiResponse.data.kyc_status;
+                user.deviceId = deviceId || "unknown";
+                if (finalStatus === "approved" && user.role !== "admin") {
+                    user.role = "seller"; 
+                }
+                await user.save();
+            }
+        } catch (aiError) {
+            console.log("⚠️ AI Engine offline or failed. Defaulting to manual review.", aiError.message);
+            
+        }
+      
+
+       
 		const verification = await Verification.upsertByUserId(req.user._id, {
 			firstName: String(firstName).trim(),
 			middleName: String(middleName || "").trim(),
@@ -68,23 +99,21 @@ export const submitVerification = async (req, res) => {
 			contactNumber: String(contactNumber).trim(),
 			governmentIdUrl: governmentIdUpload.secure_url,
 			selfieUrl: selfieUpload.secure_url,
-			status: "pending",
-			reviewerNotes: "",
-			reviewedBy: null,
-			reviewedAt: null,
+			status: finalStatus, 
+			reviewerNotes: finalStatus === "approved" ? "Auto-approved by GraphTrust AI" : "",
+			reviewedBy: finalStatus === "approved" ? "AI_SYSTEM" : null,
+			reviewedAt: finalStatus === "approved" ? serverTimestamp() : null,
 		});
 
 		return res.status(201).json({
-			message: "Verification submitted successfully",
+			message: finalStatus === "approved" ? "Verification automatically approved by AI!" : "Verification submitted successfully for manual review.",
 			verification: {
 				_id: verification._id,
 				status: verification.status,
 				reviewerNotes: verification.reviewerNotes,
-				reviewedBy: verification.reviewedBy,
-				reviewedAt: verification.reviewedAt,
 				createdAt: verification.createdAt,
-				updatedAt: verification.updatedAt,
 			},
+            trustScore: aiTrustScore 
 		});
 	} catch (error) {
 		console.log("Error in submitVerification controller", error.message);
