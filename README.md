@@ -20,3 +20,10 @@ Shell
 cd frontend
 npm install
 npm run dev
+
+Development Credentials[!CAUTION]The following credentials are for local development and testing purposes only. Do not use these in a production environment.
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Admin** | `admin@gmail.com` | `adminadmin` |
+| **User** | `user@gmail.com` | `useruser` |
