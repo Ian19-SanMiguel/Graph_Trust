@@ -5,92 +5,113 @@ import bcrypt from "bcryptjs";
 const USERS_COLLECTION = "users";
 
 export class User {
-	constructor(data) {
-		this._id = data.id || data._id;
-		this.name = data.name;
-		this.email = data.email;
-		this.password = data.password;
-		this.cartItems = data.cartItems || [];
-		this.role = data.role || "customer";
-		this.createdAt = data.createdAt;
-		this.updatedAt = data.updatedAt;
-	}
+    constructor(data) {
+        this._id = data.id || data._id;
+        this.name = data.name;
+        this.email = data.email;
+        this.password = data.password;
+        this.cartItems = data.cartItems || [];
+        this.role = data.role || "customer";
+        
+        
+        this.kycStatus = data.kycStatus || "Pending"; 
+        this.trustScore = data.trustScore !== undefined ? data.trustScore : 0.0;
+        this.deviceId = data.deviceId || "";
+       
 
-	async save() {
-		const db = getDB();
-		const userRef = doc(collection(db, USERS_COLLECTION), this._id);
-		await setDoc(userRef, {
-			name: this.name,
-			email: this.email,
-			password: this.password,
-			cartItems: this.cartItems,
-			role: this.role,
-			createdAt: this.createdAt || serverTimestamp(),
-			updatedAt: serverTimestamp(),
-		});
-		return this;
-	}
+        this.createdAt = data.createdAt;
+        this.updatedAt = data.updatedAt;
+    }
 
-	async comparePassword(password) {
-		return bcrypt.compare(password, this.password);
-	}
+    async save() {
+        const db = getDB();
+        const userRef = doc(collection(db, USERS_COLLECTION), this._id);
+        await setDoc(userRef, {
+            name: this.name,
+            email: this.email,
+            password: this.password,
+            cartItems: this.cartItems,
+            role: this.role,
+            
+            
+            kycStatus: this.kycStatus,
+            trustScore: this.trustScore,
+            deviceId: this.deviceId,
+            
 
-	toJSON() {
-		return {
-			_id: this._id,
-			name: this.name,
-			email: this.email,
-			role: this.role,
-			cartItems: this.cartItems,
-			createdAt: this.createdAt,
-			updatedAt: this.updatedAt,
-		};
-	}
+            createdAt: this.createdAt || serverTimestamp(),
+            updatedAt: serverTimestamp(),
+        });
+        return this;
+    }
 
-	static async findOne(filter) {
-		const db = getDB();
-		const usersRef = collection(db, USERS_COLLECTION);
-		const q = query(usersRef, where("email", "==", filter.email));
-		const querySnapshot = await getDocs(q);
+    async comparePassword(password) {
+        return bcrypt.compare(password, this.password);
+    }
 
-		if (querySnapshot.empty) {
-			return null;
-		}
+    toJSON() {
+        return {
+            _id: this._id,
+            name: this.name,
+            email: this.email,
+            role: this.role,
+            cartItems: this.cartItems,
+            
+           
+            kycStatus: this.kycStatus,
+            trustScore: this.trustScore,
+            deviceId: this.deviceId,
+            
 
-		const docSnap = querySnapshot.docs[0];
-		return new User({ id: docSnap.id, ...docSnap.data() });
-	}
+            createdAt: this.createdAt,
+            updatedAt: this.updatedAt,
+        };
+    }
 
-	static async findById(id) {
-		const db = getDB();
-		const userRef = doc(db, USERS_COLLECTION, id);
-		const docSnap = await getDoc(userRef);
+    static async findOne(filter) {
+        const db = getDB();
+        const usersRef = collection(db, USERS_COLLECTION);
+        const q = query(usersRef, where("email", "==", filter.email));
+        const querySnapshot = await getDocs(q);
 
-		if (!docSnap.exists()) {
-			return null;
-		}
+        if (querySnapshot.empty) {
+            return null;
+        }
 
-		return new User({ id: docSnap.id, ...docSnap.data() });
-	}
+        const docSnap = querySnapshot.docs[0];
+        return new User({ id: docSnap.id, ...docSnap.data() });
+    }
 
-	static async create(data) {
-		const salt = await bcrypt.genSalt(10);
-		const hashPassword = await bcrypt.hash(data.password, salt);
+    static async findById(id) {
+        const db = getDB();
+        const userRef = doc(db, USERS_COLLECTION, id);
+        const docSnap = await getDoc(userRef);
 
-		const user = new User({
-			...data,
-			password: hashPassword,
-		});
+        if (!docSnap.exists()) {
+            return null;
+        }
 
-		// Generate a unique ID for the user
-		const db = getDB();
-		const usersRef = collection(db, USERS_COLLECTION);
-		const newDocRef = doc(usersRef);
-		user._id = newDocRef.id;
+        return new User({ id: docSnap.id, ...docSnap.data() });
+    }
 
-		await user.save();
-		return user;
-	}
+    static async create(data) {
+        const salt = await bcrypt.genSalt(10);
+        const hashPassword = await bcrypt.hash(data.password, salt);
+
+        const user = new User({
+            ...data,
+            password: hashPassword,
+        });
+
+        // Generate a unique ID for the user
+        const db = getDB();
+        const usersRef = collection(db, USERS_COLLECTION);
+        const newDocRef = doc(usersRef);
+        user._id = newDocRef.id;
+
+        await user.save();
+        return user;
+    }
 }
 
 export default User;
