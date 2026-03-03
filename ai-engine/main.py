@@ -178,6 +178,5 @@ async def get_risk_dashboard():
 
 if __name__ == "__main__":
     import uvicorn
-    config = uvicorn.Config(app, host="0.0.0.0", port=8000)
-    server = uvicorn.Server(config)
-    await server.serve()
+    # This works properly for local Windows/Mac deployment
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
