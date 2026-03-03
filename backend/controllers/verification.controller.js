@@ -145,6 +145,32 @@ export const getMyVerificationStatus = async (req, res) => {
 			return res.json({ submitted: false, status: "not_submitted" });
 		}
 
+		if (verification.status === "approved") {
+			const verifiedUser = await User.findById(req.user._id);
+			if (verifiedUser && verifiedUser.role !== "admin") {
+				let shouldSaveUser = false;
+
+				if (verifiedUser.role !== "seller") {
+					verifiedUser.role = "seller";
+					shouldSaveUser = true;
+				}
+
+				if (String(verifiedUser.kycStatus || "").trim() !== "Verified") {
+					verifiedUser.kycStatus = "Verified";
+					shouldSaveUser = true;
+				}
+
+				if (!Number.isFinite(Number(verifiedUser.trustScore)) || Number(verifiedUser.trustScore) <= 0) {
+					verifiedUser.trustScore = 2.5;
+					shouldSaveUser = true;
+				}
+
+				if (shouldSaveUser) {
+					await verifiedUser.save();
+				}
+			}
+		}
+
 		return res.json({
 			submitted: true,
 			status: verification.status,
@@ -229,6 +255,10 @@ export const updateVerificationStatus = async (req, res) => {
 			const verifiedUser = await User.findById(userId);
 			if (verifiedUser && verifiedUser.role !== "admin") {
 				verifiedUser.role = "seller";
+				verifiedUser.kycStatus = "Verified";
+				if (!Number.isFinite(Number(verifiedUser.trustScore)) || Number(verifiedUser.trustScore) <= 0) {
+					verifiedUser.trustScore = 2.5;
+				}
 				await verifiedUser.save();
 			}
 		}

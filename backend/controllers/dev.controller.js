@@ -32,4 +32,27 @@ export const clearProductsHandler = async (req, res) => {
   }
 };
 
+export const aiHealthHandler = async (req, res) => {
+  try {
+    const response = await fetch("http://localhost:8000/trust/recalculate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: "dev-health-check" }),
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({
+        success: false,
+        message: "AI engine responded with non-OK status",
+        status: response.status,
+      });
+    }
+
+    const data = await response.json();
+    return res.json({ success: true, aiReachable: true, data });
+  } catch (err) {
+    return res.status(502).json({ success: false, aiReachable: false, message: err.message });
+  }
+};
+
 export default { seedHandler };

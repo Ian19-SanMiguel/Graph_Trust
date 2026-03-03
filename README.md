@@ -21,6 +21,14 @@ cd frontend
 npm install
 npm run dev
 
+Terminal 3: AI Engine (One Command)
+PowerShell
+./run-ai.ps1
+
+If you already installed AI dependencies and only want to start it:
+PowerShell
+./run-ai.ps1 -NoInstall
+
 Development Credentials[!CAUTION]The following credentials are for local development and testing purposes only. Do not use these in a production environment.
 
 | Role | Email | Password |

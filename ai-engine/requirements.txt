@@ -7,3 +7,4 @@ joblib
 numpy
 pydantic
 nest_asyncio
+firebase-admin

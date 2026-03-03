@@ -17,7 +17,7 @@ const ProductPage = () => {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [reviewForm, setReviewForm] = useState({ rating: 5, comment: "" });
   const { addToCart } = useCartStore();
-  const { user } = useUserStore();
+  const { user, checkAuth } = useUserStore();
   const navigate = useNavigate();
 
   const existingUserReview = user ? reviews.find((review) => review.userId === user._id) : null;
@@ -104,9 +104,22 @@ const ProductPage = () => {
         comment: reviewForm.comment,
       });
 
-      toast.success(response.data?.message || "Review submitted");
+      const trustSource = String(response.data?.trustSource || "").toLowerCase();
+      const trustUpdated = Boolean(response.data?.trustUpdated);
+      const reviewMessage = response.data?.message || "Review submitted";
+
+      if (trustSource === "ai") {
+        toast.success(`${reviewMessage} • AI trust scoring applied.`);
+      } else if (trustSource === "fallback") {
+        toast.success(`${reviewMessage} • AI unavailable, fallback trust update used.`);
+      } else if (!trustUpdated) {
+        toast("Review saved. AI trust scoring is currently unavailable.", { icon: "⚠️" });
+      } else {
+        toast.success(reviewMessage);
+      }
       setReviewForm((prev) => ({ ...prev, comment: "" }));
       await fetchReviews(id);
+      await checkAuth();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to submit review");
     } finally {

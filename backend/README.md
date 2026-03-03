@@ -21,6 +21,30 @@ cd frontend
 npm install
 npm run dev
 
+3. AI Engine (Required for AI trust scoring)
+Run this in a third terminal:
+
+Shell
+cd ai-engine
+py -3.11 -m venv .venv311
+.\.venv311\Scripts\python.exe -m pip install --upgrade pip
+.\.venv311\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv311\Scripts\python.exe -m uvicorn main:app --app-dir C:\Users\njame\Downloads\mern-ecommerce-master\ai-engine --host 127.0.0.1 --port 8000 --reload
+
+4. AI Health Check
+From backend, verify AI engine connectivity:
+
+GET /api/dev/ai-health
+
+If this returns success, backend can call the AI trust endpoint.
+
+5. Optional strict AI-only trust mode
+Set this in backend `.env` to disable fallback trust updates:
+
+REQUIRE_AI_TRUST=true
+
+When enabled, reviews still save but response includes `trustUpdated: false` and `trustSource: "none"` if AI is unavailable.
+
 Development Credentials[!CAUTION]The following credentials are for local development and testing purposes only. Do not use these in a production environment.
 
 | Role | Email | Password |

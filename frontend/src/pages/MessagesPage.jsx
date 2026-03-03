@@ -21,6 +21,8 @@ const MessagesPage = () => {
 	const [loadingMessages, setLoadingMessages] = useState(false);
 	const [messageInput, setMessageInput] = useState("");
 	const [sending, setSending] = useState(false);
+	const [startEmailInput, setStartEmailInput] = useState("");
+	const [startingByEmail, setStartingByEmail] = useState(false);
 
 	const selectedConversation = useMemo(
 		() => conversations.find((conversation) => conversation._id === selectedConversationId) || null,
@@ -127,9 +129,56 @@ const MessagesPage = () => {
 		}
 	};
 
+	const handleStartByEmail = async () => {
+		const email = startEmailInput.trim().toLowerCase();
+		if (!email || startingByEmail) return;
+
+		try {
+			setStartingByEmail(true);
+			const response = await axios.post("/chats/start-by-email", { email });
+			const startedConversation = response.data?.conversation;
+
+			if (startedConversation?._id) {
+				setSelectedConversationId(startedConversation._id);
+				setStartEmailInput("");
+				await fetchConversations({ showLoading: false });
+				await fetchMessages(startedConversation._id, { showLoading: false });
+				toast.success("Conversation started");
+			}
+		} catch (error) {
+			toast.error(error.response?.data?.message || "Failed to start conversation");
+		} finally {
+			setStartingByEmail(false);
+		}
+	};
+
 	return (
 		<div className='container mx-auto px-4 py-6'>
 			<h1 className='text-4xl font-bold text-accent-400 mb-4'>Messages</h1>
+
+			<div className='mb-4 rounded-xl border border-gray-700 bg-gray-900/70 p-3 flex items-center gap-2'>
+				<input
+					type='email'
+					value={startEmailInput}
+					onChange={(event) => setStartEmailInput(event.target.value)}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") {
+							event.preventDefault();
+							handleStartByEmail();
+						}
+					}}
+					placeholder='Start chat by email (e.g. user@example.com)'
+					className='flex-1 rounded-lg bg-gray-800 border border-gray-600 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-accent-400'
+				/>
+				<button
+					type='button'
+					onClick={handleStartByEmail}
+					disabled={!startEmailInput.trim() || startingByEmail}
+					className='inline-flex items-center gap-1 rounded bg-accent-600 hover:bg-accent-500 disabled:bg-gray-700 disabled:text-gray-400 px-3 py-2 text-sm font-semibold text-white'
+				>
+					{startingByEmail ? "Starting..." : "Start Chat"}
+				</button>
+			</div>
 
 			<div className='rounded-xl overflow-hidden border border-gray-700 bg-gray-900/80 flex min-h-[70vh]'>
 				<aside className='w-[32%] min-w-[18rem] border-r border-gray-700 bg-gray-900/90'>

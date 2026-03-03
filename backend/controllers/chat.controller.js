@@ -1,7 +1,32 @@
 import { ChatConversation, ChatMessage } from "../models/chat.model.js";
+import User from "../models/user.model.js";
 
 const canAccessConversation = (conversation, userId) =>
 	Array.isArray(conversation?.participants) && conversation.participants.includes(userId);
+
+const getOrCreateConversation = async ({ starterId, targetUserId, targetUserName }) => {
+	const conversationId = ChatConversation.buildConversationId({
+		buyerId: starterId,
+		shopId: targetUserId,
+	});
+
+	let conversation = await ChatConversation.findById(conversationId);
+
+	if (!conversation) {
+		conversation = await ChatConversation.create({
+			id: conversationId,
+			_id: conversationId,
+			buyerId: starterId,
+			shopId: targetUserId,
+			shopName: targetUserName,
+			participants: [starterId, targetUserId],
+			lastMessage: "",
+			lastMessageSenderId: "",
+		});
+	}
+
+	return conversation;
+};
 
 export const startConversation = async (req, res) => {
 	try {
@@ -19,29 +44,53 @@ export const startConversation = async (req, res) => {
 			return res.status(400).json({ message: "Cannot start a conversation with yourself" });
 		}
 
-		const conversationId = ChatConversation.buildConversationId({
-			buyerId,
-			shopId: normalizedShopId,
+		const conversation = await getOrCreateConversation({
+			starterId: buyerId,
+			targetUserId: normalizedShopId,
+			targetUserName: normalizedShopName,
 		});
-
-		let conversation = await ChatConversation.findById(conversationId);
-
-		if (!conversation) {
-			conversation = await ChatConversation.create({
-				id: conversationId,
-				_id: conversationId,
-				buyerId,
-				shopId: normalizedShopId,
-				shopName: normalizedShopName,
-				participants: [buyerId, normalizedShopId],
-				lastMessage: "",
-				lastMessageSenderId: "",
-			});
-		}
 
 		return res.status(201).json({ conversation: conversation.toJSON() });
 	} catch (error) {
 		console.log("Error in startConversation controller", error.message);
+		return res.status(500).json({ message: "Server error", error: error.message });
+	}
+};
+
+export const startConversationByEmail = async (req, res) => {
+	try {
+		const starterId = String(req.user?._id || "");
+		const starterEmail = String(req.user?.email || "").trim().toLowerCase();
+		const email = String(req.body?.email || "").trim().toLowerCase();
+
+		if (!email) {
+			return res.status(400).json({ message: "Email is required" });
+		}
+
+		if (email === starterEmail) {
+			return res.status(400).json({ message: "Cannot start a conversation with yourself" });
+		}
+
+		const targetUser = await User.findOne({ email });
+
+		if (!targetUser) {
+			return res.status(404).json({ message: "No user found with that email" });
+		}
+
+		const targetUserId = String(targetUser._id || "");
+		if (!targetUserId) {
+			return res.status(400).json({ message: "Invalid target user" });
+		}
+
+		const conversation = await getOrCreateConversation({
+			starterId,
+			targetUserId,
+			targetUserName: String(targetUser.name || targetUser.email || "User").trim(),
+		});
+
+		return res.status(201).json({ conversation: conversation.toJSON() });
+	} catch (error) {
+		console.log("Error in startConversationByEmail controller", error.message);
 		return res.status(500).json({ message: "Server error", error: error.message });
 	}
 };
