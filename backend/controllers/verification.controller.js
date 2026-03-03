@@ -2,7 +2,6 @@ import cloudinary from "../lib/cloudinary.js";
 import Verification from "../models/verification.model.js";
 import User from "../models/user.model.js";
 import { serverTimestamp } from "firebase/firestore";
-import axios from "axios";
 
 const requiredFields = [
 	"firstName",
@@ -20,10 +19,17 @@ const isDataUrl = (value) => typeof value === "string" && value.startsWith("data
 export const submitVerification = async (req, res) => {
 	try {
 		const {
-			firstName, middleName, lastName, suffix, dateOfBirth,
-			sex, nationality, address, contactNumber,
-			governmentIdImage, selfieImage,
-            deviceId 
+			firstName,
+			middleName,
+			lastName,
+			suffix,
+			dateOfBirth,
+			sex,
+			nationality,
+			address,
+			contactNumber,
+			governmentIdImage,
+			selfieImage,
 		} = req.body;
 
 		for (const field of requiredFields) {
@@ -45,48 +51,55 @@ export const submitVerification = async (req, res) => {
 			return res.status(409).json({ message: "Your account is already verified" });
 		}
 
-        
 		const [governmentIdUpload, selfieUpload] = await Promise.all([
 			cloudinary.uploader.upload(governmentIdImage, { folder: "verifications/government-ids" }),
 			cloudinary.uploader.upload(selfieImage, { folder: "verifications/selfies" }),
 		]);
 
-        let aiTrustScore = 0.0;
-        let finalStatus = "pending"; 
+        let finalStatus = "pending";
+        let aiReviewerNotes = "";
+        let aiReviewedBy = null;
+        let aiReviewedAt = null;
 
         try {
             
-            const aiResponse = await axios.post("http://localhost:8000/kyc/upload", {
-                user_id: String(req.user._id),
-                doc_url: governmentIdUpload.secure_url,
-                selfie_url: selfieUpload.secure_url
+            const response = await fetch("http://localhost:8000/kyc/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    user_id: String(req.user._id),
+                    doc_url: governmentIdUpload.secure_url,
+                    selfie_url: selfieUpload.secure_url
+                })
             });
 
-            aiTrustScore = aiResponse.data.trust_score;
-            
-            
-            if (aiResponse.data.kyc_status === "Verified") {
-                finalStatus = "approved";
-            }
-
-            
-            const user = await User.findById(req.user._id);
-            if (user) {
-                user.trustScore = aiTrustScore;
-                user.kycStatus = aiResponse.data.kyc_status;
-                user.deviceId = deviceId || "unknown";
-                if (finalStatus === "approved" && user.role !== "admin") {
-                    user.role = "seller"; 
+            if (response.ok) {
+                const aiData = await response.json();
+                
+                
+                if (aiData.kyc_status === "Verified") {
+                    finalStatus = "approved";
+                    aiReviewerNotes = "Auto-approved by GraphTrust AI";
+                    aiReviewedBy = "AI_SYSTEM";
+                    aiReviewedAt = serverTimestamp();
                 }
-                await user.save();
+
+                
+                const user = await User.findById(req.user._id);
+                if (user) {
+                    user.trustScore = aiData.trust_score;
+                    user.kycStatus = aiData.kyc_status;
+                    if (finalStatus === "approved" && user.role !== "admin") {
+                        user.role = "seller"; 
+                    }
+                    await user.save();
+                }
             }
         } catch (aiError) {
-            console.log("⚠️ AI Engine offline or failed. Defaulting to manual review.", aiError.message);
-            
+            console.log("⚠️ AI Engine offline. Proceeding with standard manual verification.");
         }
-      
+        
 
-       
 		const verification = await Verification.upsertByUserId(req.user._id, {
 			firstName: String(firstName).trim(),
 			middleName: String(middleName || "").trim(),
@@ -99,27 +112,30 @@ export const submitVerification = async (req, res) => {
 			contactNumber: String(contactNumber).trim(),
 			governmentIdUrl: governmentIdUpload.secure_url,
 			selfieUrl: selfieUpload.secure_url,
-			status: finalStatus, 
-			reviewerNotes: finalStatus === "approved" ? "Auto-approved by GraphTrust AI" : "",
-			reviewedBy: finalStatus === "approved" ? "AI_SYSTEM" : null,
-			reviewedAt: finalStatus === "approved" ? serverTimestamp() : null,
+			status: finalStatus,
+			reviewerNotes: aiReviewerNotes,
+			reviewedBy: aiReviewedBy,
+			reviewedAt: aiReviewedAt,
 		});
 
 		return res.status(201).json({
-			message: finalStatus === "approved" ? "Verification automatically approved by AI!" : "Verification submitted successfully for manual review.",
+			message: finalStatus === "approved" ? "Verification automatically approved by AI!" : "Verification submitted successfully",
 			verification: {
 				_id: verification._id,
 				status: verification.status,
 				reviewerNotes: verification.reviewerNotes,
+				reviewedBy: verification.reviewedBy,
+				reviewedAt: verification.reviewedAt,
 				createdAt: verification.createdAt,
+				updatedAt: verification.updatedAt,
 			},
-            trustScore: aiTrustScore 
 		});
 	} catch (error) {
 		console.log("Error in submitVerification controller", error.message);
 		return res.status(500).json({ message: "Server error", error: error.message });
 	}
 };
+
 
 export const getMyVerificationStatus = async (req, res) => {
 	try {
