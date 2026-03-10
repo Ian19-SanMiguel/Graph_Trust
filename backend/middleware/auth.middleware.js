@@ -46,9 +46,44 @@ export const adminRoute = (req, res, next) => {
 };
 
 export const sellerOrAdminRoute = (req, res, next) => {
-	if (req.user && (req.user.role === "admin" || req.user.role === "seller")) {
+	const normalizedKycStatus = String(req.user?.kycStatus || "").trim().toLowerCase();
+	const hasApprovedKyc = normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
+
+	if (req.user && (req.user.role === "admin" || hasApprovedKyc)) {
 		next();
 	} else {
-		return res.status(403).json({ message: "Access denied - Seller or Admin only" });
+		return res.status(403).json({ message: "Access denied - KYC approved sellers or admin only" });
 	}
+};
+
+export const pendingOrHigherKycOrAdminRoute = (req, res, next) => {
+	const normalizedKycStatus = String(req.user?.kycStatus || "").trim().toLowerCase();
+	const hasPendingOrHigherKyc =
+		normalizedKycStatus === "pending" ||
+		normalizedKycStatus === "verified" ||
+		normalizedKycStatus === "approved";
+
+	if (req.user && (req.user.role === "admin" || hasPendingOrHigherKyc)) {
+		next();
+	} else {
+		return res.status(403).json({ message: "Access denied - KYC pending or approved sellers or admin only" });
+	}
+};
+
+export const requireMfaForPrivilegedRoute = (req, res, next) => {
+	const role = String(req.user?.role || "").trim().toLowerCase();
+	const isPrivileged = role === "admin" || role === "seller";
+
+	if (!isPrivileged) {
+		return next();
+	}
+
+	if (req.user?.mfaEnabled) {
+		return next();
+	}
+
+	return res.status(403).json({
+		message: "MFA is required for admin and seller actions",
+		mfaRequired: true,
+	});
 };

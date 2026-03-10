@@ -3,14 +3,19 @@ import { ShoppingCart } from "lucide-react";
 import { useUserStore } from "../stores/useUserStore";
 import { useCartStore } from "../stores/useCartStore";
 import { useNavigate } from "react-router-dom";
+import { formatPrice } from "../lib/price";
 
 const ProductCard = ({ product }) => {
 	const { user } = useUserStore();
 	const { addToCart } = useCartStore();
 	const navigate = useNavigate();
+	const isOwnProduct = Boolean(user && product?.shopId && String(product.shopId) === String(user._id));
 	const handleAddToCart = () => {
 		if (!user) {
 			toast.error("Please login to add products to cart", { id: "login" });
+			return;
+		} else if (isOwnProduct) {
+			toast.error("You cannot purchase your own product");
 			return;
 		} else {
 			// add to cart
@@ -52,19 +57,19 @@ const ProductCard = ({ product }) => {
 				</button>
 				<div className='mt-2 mb-5 flex items-center justify-between'>
 					<p>
-						<span className='text-3xl font-bold text-accent-400'>${product.price}</span>
+						<span className='text-3xl font-bold text-accent-400'>₱{formatPrice(product.price)}</span>
 					</p>
 				</div>
 				<button
-				className='flex items-center justify-center rounded-lg bg-accent-400 px-5 py-2.5 text-center text-sm font-medium text-white
-				 hover:bg-accent-300 focus:outline-none focus:ring-2 focus:ring-accent-400 border-2 border-accent-300'
+				disabled={isOwnProduct}
+				className='flex items-center justify-center rounded-lg bg-accent-400 px-5 py-2.5 text-center text-sm font-medium text-white hover:bg-accent-300 focus:outline-none focus:ring-2 focus:ring-accent-400 border-2 border-accent-300 disabled:cursor-not-allowed disabled:border-gray-600 disabled:bg-gray-700 disabled:text-gray-300'
 					onClick={(e) => {
 						e.stopPropagation();
 						handleAddToCart();
 					}}
 				>
 					<ShoppingCart size={22} className='mr-2' />
-					Add to cart
+					{isOwnProduct ? "Your product" : "Add to cart"}
 				</button>
 			</div>
 		</div>

@@ -22,14 +22,24 @@ export const getCartProducts = async (req, res) => {
 
 export const addToCart = async (req, res) => {
 	try {
-		const { productId } = req.body;
+		const { productId, quantity } = req.body;
 		const user = req.user;
+		const normalizedQuantity = Math.max(1, Number.parseInt(quantity, 10) || 1);
+
+		const product = await Product.findById(productId);
+		if (!product) {
+			return res.status(404).json({ message: "Product not found" });
+		}
+
+		if (product.shopId && String(product.shopId) === String(user._id)) {
+			return res.status(400).json({ message: "You cannot purchase your own product" });
+		}
 
 		const existingItem = user.cartItems.find((item) => (item.product || item) === productId);
 		if (existingItem) {
-			existingItem.quantity += 1;
+			existingItem.quantity += normalizedQuantity;
 		} else {
-			user.cartItems.push({ product: productId, quantity: 1 });
+			user.cartItems.push({ product: productId, quantity: normalizedQuantity });
 		}
 
 		await user.save();

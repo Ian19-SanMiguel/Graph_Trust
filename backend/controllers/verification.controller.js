@@ -2,6 +2,7 @@ import cloudinary from "../lib/cloudinary.js";
 import Verification from "../models/verification.model.js";
 import User from "../models/user.model.js";
 import { serverTimestamp } from "firebase/firestore";
+import { recalculateAiTrustForUser, sendKycGraphEvent } from "../utils/aiTrust.js";
 
 const requiredFields = [
 	"firstName",
@@ -11,10 +12,20 @@ const requiredFields = [
 	"nationality",
 	"address",
 	"contactNumber",
+	"businessName",
+	"authorizedRepresentativeConfirmed",
 ];
 const allowedVerificationStatuses = ["pending", "approved", "rejected"];
 
 const isDataUrl = (value) => typeof value === "string" && value.startsWith("data:");
+
+const uploadVerificationAsset = async (dataUrl, folder) => {
+	const isPdf = String(dataUrl || "").startsWith("data:application/pdf");
+	return cloudinary.uploader.upload(dataUrl, {
+		folder,
+		resource_type: isPdf ? "raw" : "image",
+	});
+};
 
 export const submitVerification = async (req, res) => {
 	try {
@@ -28,6 +39,10 @@ export const submitVerification = async (req, res) => {
 			nationality,
 			address,
 			contactNumber,
+			businessName,
+			authorizedRepresentativeConfirmed,
+			businessPermitImage,
+			taxIdImage,
 			governmentIdImage,
 			selfieImage,
 		} = req.body;
@@ -38,8 +53,16 @@ export const submitVerification = async (req, res) => {
 			}
 		}
 
-		if (!isDataUrl(governmentIdImage) || !isDataUrl(selfieImage)) {
-			return res.status(400).json({ message: "Government ID and selfie images are required" });
+		if (authorizedRepresentativeConfirmed !== true) {
+			return res.status(400).json({
+				message: "Authorization confirmation is required",
+			});
+		}
+
+		if (!isDataUrl(governmentIdImage) || !isDataUrl(selfieImage) || !isDataUrl(businessPermitImage) || !isDataUrl(taxIdImage)) {
+			return res.status(400).json({
+				message: "Business permit, tax ID, government ID, and selfie files are required",
+			});
 		}
 
 		const existingVerification = await Verification.findByUserId(req.user._id);
@@ -51,54 +74,12 @@ export const submitVerification = async (req, res) => {
 			return res.status(409).json({ message: "Your account is already verified" });
 		}
 
-		const [governmentIdUpload, selfieUpload] = await Promise.all([
-			cloudinary.uploader.upload(governmentIdImage, { folder: "verifications/government-ids" }),
-			cloudinary.uploader.upload(selfieImage, { folder: "verifications/selfies" }),
+		const [businessPermitUpload, taxIdUpload, governmentIdUpload, selfieUpload] = await Promise.all([
+			uploadVerificationAsset(businessPermitImage, "verifications/business-permits"),
+			uploadVerificationAsset(taxIdImage, "verifications/tax-ids"),
+			uploadVerificationAsset(governmentIdImage, "verifications/government-ids"),
+			uploadVerificationAsset(selfieImage, "verifications/selfies"),
 		]);
-
-        let finalStatus = "pending";
-        let aiReviewerNotes = "";
-        let aiReviewedBy = null;
-        let aiReviewedAt = null;
-
-        try {
-            
-            const response = await fetch("http://localhost:8000/kyc/upload", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    user_id: String(req.user._id),
-                    doc_url: governmentIdUpload.secure_url,
-                    selfie_url: selfieUpload.secure_url
-                })
-            });
-
-            if (response.ok) {
-                const aiData = await response.json();
-                
-                
-                if (aiData.kyc_status === "Verified") {
-                    finalStatus = "approved";
-                    aiReviewerNotes = "Auto-approved by GraphTrust AI";
-                    aiReviewedBy = "AI_SYSTEM";
-                    aiReviewedAt = serverTimestamp();
-                }
-
-                
-                const user = await User.findById(req.user._id);
-                if (user) {
-                    user.trustScore = aiData.trust_score;
-                    user.kycStatus = aiData.kyc_status;
-                    if (finalStatus === "approved" && user.role !== "admin") {
-                        user.role = "seller"; 
-                    }
-                    await user.save();
-                }
-            }
-        } catch (aiError) {
-            console.log("⚠️ AI Engine offline. Proceeding with standard manual verification.");
-        }
-        
 
 		const verification = await Verification.upsertByUserId(req.user._id, {
 			firstName: String(firstName).trim(),
@@ -110,16 +91,20 @@ export const submitVerification = async (req, res) => {
 			nationality: String(nationality).trim(),
 			address: String(address).trim(),
 			contactNumber: String(contactNumber).trim(),
+			businessName: String(businessName).trim(),
+			authorizedRepresentativeConfirmed: true,
+			businessPermitUrl: businessPermitUpload.secure_url,
+			taxIdUrl: taxIdUpload.secure_url,
 			governmentIdUrl: governmentIdUpload.secure_url,
 			selfieUrl: selfieUpload.secure_url,
-			status: finalStatus,
-			reviewerNotes: aiReviewerNotes,
-			reviewedBy: aiReviewedBy,
-			reviewedAt: aiReviewedAt,
+			status: "pending",
+			reviewerNotes: "",
+			reviewedBy: null,
+			reviewedAt: null,
 		});
 
 		return res.status(201).json({
-			message: finalStatus === "approved" ? "Verification automatically approved by AI!" : "Verification submitted successfully",
+			message: "Verification submitted successfully",
 			verification: {
 				_id: verification._id,
 				status: verification.status,
@@ -139,17 +124,34 @@ export const submitVerification = async (req, res) => {
 
 export const getMyVerificationStatus = async (req, res) => {
 	try {
-		const verification = await Verification.findByUserId(req.user._id);
+		let verification = await Verification.findByUserId(req.user._id);
 
 		if (!verification) {
 			return res.json({ submitted: false, status: "not_submitted" });
 		}
 
-		if (verification.status === "approved") {
-			const verifiedUser = await User.findById(req.user._id);
-			if (verifiedUser && verifiedUser.role !== "admin") {
-				let shouldSaveUser = false;
+		if (verification.reviewedBy === "AI_SYSTEM") {
+			verification = await Verification.upsertByUserId(req.user._id, {
+				status: "pending",
+				reviewerNotes: "",
+				reviewedBy: null,
+				reviewedAt: null,
+			});
+		}
 
+		const verifiedUser = await User.findById(req.user._id);
+		if (verifiedUser && verifiedUser.role !== "admin") {
+			let shouldSaveUser = false;
+			const normalizedBusinessName = String(verification.businessName || "").trim();
+			if (
+				normalizedBusinessName &&
+				String(verifiedUser.storefrontName || "").trim() !== normalizedBusinessName
+			) {
+				verifiedUser.storefrontName = normalizedBusinessName;
+				shouldSaveUser = true;
+			}
+
+			if (verification.status === "approved") {
 				if (verifiedUser.role !== "seller") {
 					verifiedUser.role = "seller";
 					shouldSaveUser = true;
@@ -164,10 +166,22 @@ export const getMyVerificationStatus = async (req, res) => {
 					verifiedUser.trustScore = 2.5;
 					shouldSaveUser = true;
 				}
-
-				if (shouldSaveUser) {
-					await verifiedUser.save();
+			} else {
+				if (verifiedUser.role === "seller") {
+					verifiedUser.role = "customer";
+					shouldSaveUser = true;
 				}
+
+				const normalizedStatus = String(verification.status || "pending").toLowerCase();
+				const mappedKycStatus = normalizedStatus === "rejected" ? "Rejected" : "Pending";
+				if (String(verifiedUser.kycStatus || "").trim() !== mappedKycStatus) {
+					verifiedUser.kycStatus = mappedKycStatus;
+					shouldSaveUser = true;
+				}
+			}
+
+			if (shouldSaveUser) {
+				await verifiedUser.save();
 			}
 		}
 
@@ -195,7 +209,20 @@ export const getVerificationRequests = async (req, res) => {
 		const filter = status === "all" ? {} : { status };
 		const verifications = await Verification.find(filter);
 
-		const sortedVerifications = verifications
+		for (const verification of verifications) {
+			if (verification.reviewedBy === "AI_SYSTEM") {
+				await Verification.upsertByUserId(verification.userId, {
+					status: "pending",
+					reviewerNotes: "",
+					reviewedBy: null,
+					reviewedAt: null,
+				});
+			}
+		}
+
+		const normalizedVerifications = await Verification.find(filter);
+
+		const sortedVerifications = normalizedVerifications
 			.sort((a, b) => {
 				const aSeconds = a.updatedAt?.seconds || 0;
 				const bSeconds = b.updatedAt?.seconds || 0;
@@ -213,6 +240,10 @@ export const getVerificationRequests = async (req, res) => {
 				nationality: verification.nationality,
 				address: verification.address,
 				contactNumber: verification.contactNumber,
+				businessName: verification.businessName,
+				authorizedRepresentativeConfirmed: verification.authorizedRepresentativeConfirmed,
+				businessPermitUrl: verification.businessPermitUrl,
+				taxIdUrl: verification.taxIdUrl,
 				governmentIdUrl: verification.governmentIdUrl,
 				selfieUrl: verification.selfieUrl,
 				status: verification.status,
@@ -254,11 +285,42 @@ export const updateVerificationStatus = async (req, res) => {
 		if (status === "approved") {
 			const verifiedUser = await User.findById(userId);
 			if (verifiedUser && verifiedUser.role !== "admin") {
+				const normalizedBusinessName = String(existingVerification.businessName || "").trim();
+				if (normalizedBusinessName) {
+					verifiedUser.storefrontName = normalizedBusinessName;
+				}
 				verifiedUser.role = "seller";
 				verifiedUser.kycStatus = "Verified";
 				if (!Number.isFinite(Number(verifiedUser.trustScore)) || Number(verifiedUser.trustScore) <= 0) {
 					verifiedUser.trustScore = 2.5;
 				}
+				await verifiedUser.save();
+
+				try {
+					await sendKycGraphEvent({
+						userId,
+						identityMarkers: {
+							business: String(existingVerification.businessName || "").trim(),
+							contact: String(existingVerification.contactNumber || "").trim(),
+							nationality: String(existingVerification.nationality || "").trim(),
+						},
+					});
+					await recalculateAiTrustForUser(userId);
+				} catch (aiError) {
+					console.log("AI trust update after verification approval failed:", aiError.message);
+				}
+			}
+		} else {
+			const verifiedUser = await User.findById(userId);
+			if (verifiedUser && verifiedUser.role !== "admin") {
+				const normalizedBusinessName = String(existingVerification.businessName || "").trim();
+				if (normalizedBusinessName) {
+					verifiedUser.storefrontName = normalizedBusinessName;
+				}
+				if (verifiedUser.role === "seller") {
+					verifiedUser.role = "customer";
+				}
+				verifiedUser.kycStatus = status === "rejected" ? "Rejected" : "Pending";
 				await verifiedUser.save();
 			}
 		}

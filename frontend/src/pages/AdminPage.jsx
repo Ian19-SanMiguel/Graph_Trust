@@ -1,26 +1,40 @@
-import { BarChart, PlusCircle, ShieldCheck, ShoppingBasket } from "lucide-react";
+import { BarChart, ExternalLink, Flag, PlusCircle, ShieldCheck, ShoppingBasket, Store, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
 import AnalyticsTab from "../components/AnalyticsTab";
 import CreateProductForm from "../components/CreateProductForm";
+import FulfillmentTab from "../components/FulfillmentTab";
 import ProductsList from "../components/ProductsList";
+import ReportsTab from "../components/ReportsTab";
+import StorefrontSettingsTab from "../components/StorefrontSettingsTab";
 import VerificationsTab from "../components/VerificationsTab";
 import { useProductStore } from "../stores/useProductStore";
 import { useUserStore } from "../stores/useUserStore";
 
 const AdminPage = () => {
-	const [activeTab, setActiveTab] = useState("create");
-	const { fetchAllProducts, fetchMyProducts } = useProductStore();
+	const { fetchAllProducts } = useProductStore();
 	const { user } = useUserStore();
 	const isAdmin = user?.role === "admin";
+	const normalizedKycStatus = String(user?.kycStatus || "").trim().toLowerCase();
+	const hasApprovedKyc = normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
+	const canManageInventory = isAdmin || hasApprovedKyc;
+	const [activeTab, setActiveTab] = useState(() => (canManageInventory ? "create" : "storefront"));
 
 	const tabs = [
-		{ id: "create", label: "Create Product", icon: PlusCircle },
-		{ id: "products", label: "Products", icon: ShoppingBasket },
+		...(canManageInventory
+			? [
+					{ id: "create", label: "Create Product", icon: PlusCircle },
+					{ id: "products", label: "Products", icon: ShoppingBasket },
+					{ id: "fulfillment", label: "Fulfillment", icon: Truck },
+			  ]
+			: []),
+		{ id: "storefront", label: "Storefront", icon: Store },
 		...(isAdmin
 			? [
 					{ id: "verifications", label: "Verifications", icon: ShieldCheck },
+					{ id: "reports", label: "Reports", icon: Flag },
 					{ id: "analytics", label: "Analytics", icon: BarChart },
 			  ]
 			: []),
@@ -29,13 +43,16 @@ const AdminPage = () => {
 	const [seedResult, setSeedResult] = useState(null);
 
 	useEffect(() => {
-		if (isAdmin) {
-			fetchAllProducts();
-			return;
+		if (!canManageInventory && ["create", "products", "fulfillment"].includes(activeTab)) {
+			setActiveTab("storefront");
 		}
+	}, [canManageInventory, activeTab]);
 
-		fetchMyProducts();
-	}, [fetchAllProducts, fetchMyProducts, isAdmin]);
+	useEffect(() => {
+		if (canManageInventory) {
+			fetchAllProducts();
+		}
+	}, [fetchAllProducts, canManageInventory]);
 
 	return (
 		<div className='min-h-screen relative overflow-hidden'>
@@ -91,8 +108,24 @@ const AdminPage = () => {
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.8 }}
 				>
-					{isAdmin ? "Admin Dashboard" : "Seller Dashboard"}
+					{isAdmin ? "Admin Dashboard" : canManageInventory ? "Seller Dashboard" : "Storefront Setup"}
 				</motion.h1>
+
+				{!canManageInventory && (
+					<div className='mx-auto mb-6 max-w-3xl rounded-lg border border-accent-500/40 bg-accent-500/10 px-4 py-3 text-sm text-gray-200'>
+						Inventory management unlocks after KYC approval. You can still customize your storefront while your verification is pending.
+					</div>
+				)}
+
+				<div className='flex justify-center mb-6'>
+					<Link
+						to={`/shop/${user?._id}`}
+						className='inline-flex items-center gap-2 rounded-md bg-accent-600 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-500'
+					>
+						<ExternalLink className='h-4 w-4' />
+						View My Storefront
+					</Link>
+				</div>
 
 				<div className='flex justify-center mb-8'>
 					{tabs.map((tab) => (
@@ -110,9 +143,12 @@ const AdminPage = () => {
 						</button>
 					))}
 				</div>
-				{activeTab === "create" && <CreateProductForm />}
-				{activeTab === "products" && <ProductsList canToggleFeatured={isAdmin} />}
+				{canManageInventory && activeTab === "create" && <CreateProductForm />}
+				{canManageInventory && activeTab === "products" && <ProductsList canToggleFeatured={isAdmin} />}
+				{canManageInventory && activeTab === "fulfillment" && <FulfillmentTab />}
+				{activeTab === "storefront" && <StorefrontSettingsTab />}
 				{activeTab === "verifications" && <VerificationsTab />}
+				{activeTab === "reports" && <ReportsTab />}
 				{activeTab === "analytics" && <AnalyticsTab />}
 			</div>
 		</div>

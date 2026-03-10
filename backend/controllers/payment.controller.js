@@ -1,6 +1,41 @@
 import Coupon from "../models/coupon.model.js";
 import Order from "../models/order.model.js";
+import Product from "../models/product.model.js";
+import User from "../models/user.model.js";
 import { stripe } from "../lib/stripe.js";
+import { recalculateAiTrustForUsers, sendOrderGraphEvent } from "../utils/aiTrust.js";
+
+const removePurchasedItemsFromUserCart = async (userId, purchasedProducts = []) => {
+	const normalizedUserId = String(userId || "").trim();
+	if (!normalizedUserId) {
+		return;
+	}
+
+	const user = await User.findById(normalizedUserId);
+	if (!user) {
+		return;
+	}
+
+	const purchasedProductIds = new Set(
+		(purchasedProducts || [])
+			.map((item) => String(item?.id || item?.product || "").trim())
+			.filter(Boolean)
+	);
+
+	if (!purchasedProductIds.size) {
+		return;
+	}
+
+	const nextCartItems = (user.cartItems || []).filter((item) => {
+		const itemProductId = String(item?.product || item || "").trim();
+		return !purchasedProductIds.has(itemProductId);
+	});
+
+	if (nextCartItems.length !== (user.cartItems || []).length) {
+		user.cartItems = nextCartItems;
+		await user.save();
+	}
+};
 
 export const createCheckoutSession = async (req, res) => {
 	try {
@@ -11,21 +46,53 @@ export const createCheckoutSession = async (req, res) => {
 		}
 
 		let totalAmount = 0;
+		const normalizedProducts = products
+			.map((product) => ({
+				id: product?._id || product?.id,
+				quantity: Number(product?.quantity) || 1,
+			}))
+			.filter((product) => Boolean(product.id));
 
-		const lineItems = products.map((product) => {
-			const amount = Math.round(product.price * 100); // stripe wants u to send in the format of cents
-			totalAmount += amount * product.quantity;
+		if (!normalizedProducts.length) {
+			return res.status(400).json({ error: "No valid products were provided" });
+		}
+
+		const uniqueIds = [...new Set(normalizedProducts.map((product) => product.id))];
+		const productDocs = await Promise.all(uniqueIds.map((id) => Product.findById(id)));
+		const productMap = new Map();
+
+		for (let i = 0; i < uniqueIds.length; i += 1) {
+			const foundProduct = productDocs[i];
+			if (!foundProduct) {
+				return res.status(404).json({ error: "One or more products no longer exist" });
+			}
+			productMap.set(uniqueIds[i], foundProduct);
+		}
+
+		const hasOwnProduct = normalizedProducts.some((item) => {
+			const product = productMap.get(item.id);
+			return product?.shopId && String(product.shopId) === String(req.user._id);
+		});
+
+		if (hasOwnProduct) {
+			return res.status(400).json({ error: "You cannot purchase your own product" });
+		}
+
+		const lineItems = normalizedProducts.map((item) => {
+			const canonicalProduct = productMap.get(item.id);
+			const amount = Math.round(Number(canonicalProduct.price || 0) * 100);
+			totalAmount += amount * item.quantity;
 
 			return {
 				price_data: {
-					currency: "usd",
+					currency: "php",
 					product_data: {
-						name: product.name,
-						images: [product.image],
+						name: canonicalProduct.name,
+						images: [canonicalProduct.image],
 					},
 					unit_amount: amount,
 				},
-				quantity: product.quantity || 1,
+				quantity: item.quantity,
 			};
 		});
 
@@ -54,11 +121,14 @@ export const createCheckoutSession = async (req, res) => {
 				userId: req.user._id.toString(),
 				couponCode: couponCode || "",
 				products: JSON.stringify(
-					products.map((p) => ({
-						id: p._id,
-						quantity: p.quantity,
-						price: p.price,
-					}))
+					normalizedProducts.map((item) => {
+						const canonicalProduct = productMap.get(item.id);
+						return {
+							id: item.id,
+							quantity: item.quantity,
+							price: Number(canonicalProduct?.price || 0),
+						};
+					})
 				),
 			},
 		});
@@ -87,6 +157,26 @@ export const checkoutSuccess = async (req, res) => {
 		console.log("Session retrieved successfully:", session.payment_status);
 
 		if (session.payment_status === "paid") {
+			const products = JSON.parse(session.metadata.products || "[]");
+
+			if (String(req.user?._id || "") !== String(session.metadata.userId || "")) {
+				return res.status(403).json({
+					success: false,
+					message: "You are not allowed to finalize this checkout session.",
+				});
+			}
+
+			const existingOrder = await Order.findOne({ stripeSessionId: sessionId });
+			if (existingOrder) {
+				await removePurchasedItemsFromUserCart(session.metadata.userId, products);
+				return res.status(200).json({
+					success: true,
+					message: "Payment already processed.",
+					orderId: existingOrder._id,
+					alreadyProcessed: true,
+				});
+			}
+
 			if (session.metadata.couponCode) {
 				const coupon = await Coupon.findOne({
 					code: session.metadata.couponCode,
@@ -98,17 +188,73 @@ export const checkoutSuccess = async (req, res) => {
 			}
 
 			// create a new Order
-			const products = JSON.parse(session.metadata.products);
+			const orderedProductDocs = await Promise.all(products.map((product) => Product.findById(product.id)));
+			const hasOwnProductInPaidSession = orderedProductDocs.some((orderedProduct, index) => {
+				if (!orderedProduct) {
+					return false;
+				}
+				const buyerId = String(session.metadata.userId || "");
+				const ownerId = String(orderedProduct.shopId || "");
+				if (ownerId && ownerId === buyerId) {
+					console.warn("Blocked self-purchase order creation", {
+						sessionId,
+						productId: products[index]?.id,
+						buyerId,
+					});
+					return true;
+				}
+				return false;
+			});
+
+			if (hasOwnProductInPaidSession) {
+				return res.status(400).json({
+					success: false,
+					message: "Order contains your own product and cannot be completed.",
+				});
+			}
+
 			const newOrder = await Order.create({
 				user: session.metadata.userId,
 				products: products.map((product) => ({
 					product: product.id,
 					quantity: product.quantity,
 					price: product.price,
+					fulfillmentStatus: "processing",
+					fulfillmentUpdatedAt: new Date().toISOString(),
 				})),
 				totalAmount: session.amount_total / 100, // convert from cents to dollars,
 				stripeSessionId: sessionId,
 			});
+
+			await removePurchasedItemsFromUserCart(session.metadata.userId, products);
+
+			const orderItemsWithSellers = await Promise.all(
+				products.map(async (item) => {
+					const productDoc = await Product.findById(item.id);
+					return {
+						productId: String(item.id || ""),
+						quantity: Number(item.quantity || 1),
+						sellerId: String(productDoc?.shopId || ""),
+					};
+				})
+			);
+
+			try {
+				await sendOrderGraphEvent({
+					buyerId: String(session.metadata.userId || ""),
+					orderId: String(newOrder._id || sessionId),
+					totalAmount: Number(session.amount_total || 0) / 100,
+					items: orderItemsWithSellers,
+				});
+
+				const usersToRescore = [
+					String(session.metadata.userId || ""),
+					...orderItemsWithSellers.map((item) => String(item.sellerId || "")),
+				];
+				await recalculateAiTrustForUsers(usersToRescore);
+			} catch (aiError) {
+				console.log("AI trust update after checkout failed:", aiError.message);
+			}
 
 			res.status(200).json({
 				success: true,

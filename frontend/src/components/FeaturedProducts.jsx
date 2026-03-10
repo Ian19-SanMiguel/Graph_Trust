@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
 import { ShoppingCart, ChevronLeft, ChevronRight } from "lucide-react";
 import { useCartStore } from "../stores/useCartStore";
+import { formatPrice } from "../lib/price";
+import { useNavigate } from "react-router-dom";
 
 const FeaturedProducts = ({ featuredProducts }) => {
 	const [currentIndex, setCurrentIndex] = useState(0);
 	const [itemsPerPage, setItemsPerPage] = useState(4);
 
 	const { addToCart } = useCartStore();
+	const navigate = useNavigate();
 
 	useEffect(() => {
 		const handleResize = () => {
@@ -44,7 +47,10 @@ const FeaturedProducts = ({ featuredProducts }) => {
 						>
 							{featuredProducts?.map((product) => (
 								<div key={product._id} className='w-full sm:w-1/2 lg:w-1/3 xl:w-1/4 flex-shrink-0 px-2'>
-									<div className='bg-white bg-opacity-10 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden h-full transition-all duration-300 hover:shadow-xl border border-accent-500/30'>
+									<div
+										onClick={() => navigate(`/product/${product._id}`)}
+										className='cursor-pointer bg-white bg-opacity-10 backdrop-blur-sm rounded-lg shadow-lg overflow-hidden h-full transition-all duration-300 hover:shadow-xl border border-accent-500/30'
+									>
 										<div className='overflow-hidden'>
 											<img
 												src={product.image || `https://source.unsplash.com/600x600/?${encodeURIComponent(product.category)}`}
@@ -56,10 +62,13 @@ const FeaturedProducts = ({ featuredProducts }) => {
 										<div className='p-4'>
 											<h3 className='text-lg font-semibold mb-2 text-white'>{product.name}</h3>
 										<p className='text-accent-300 font-medium mb-4'>
-											${product.price.toFixed(2)}
+												₱{formatPrice(product.price)}
 										</p>
 										<button
-											onClick={() => addToCart(product)}
+											onClick={(e) => {
+												e.stopPropagation();
+												addToCart(product);
+											}}
 										className='w-full bg-accent-400 hover:bg-accent-300 text-white font-semibold py-2 px-4 rounded transition-colors duration-300 
 										flex items-center justify-center border-2 border-accent-300'
 											>

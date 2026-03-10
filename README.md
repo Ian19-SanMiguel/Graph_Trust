@@ -25,6 +25,18 @@ Terminal 3: AI Engine (One Command)
 PowerShell
 ./run-ai.ps1
 
+AI graph persistence now defaults to Firestore (database-backed) and no longer silently falls back to local SQLite.
+Before starting the AI engine, provide Firebase Admin credentials, for example:
+
+PowerShell
+$env:FIREBASE_PROJECT_ID="your-project-id"
+$env:FIREBASE_CREDENTIALS_PATH="C:\path\to\service-account.json"
+
+Optional local-only fallback (not recommended for normal app runs):
+
+PowerShell
+$env:GRAPH_STORE_BACKEND="sqlite"
+
 If you already installed AI dependencies and only want to start it:
 PowerShell
 ./run-ai.ps1 -NoInstall

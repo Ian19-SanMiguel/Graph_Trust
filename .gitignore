@@ -25,8 +25,12 @@ dist-ssr
 
 # Python / AI Engine ignores
 ai-engine/__pycache__/
+ai-engine/.venv/
+ai-engine/.venv311/
 ai-engine/venv/
 ai-engine/env/
+.venv/
 *.pyc
 .pytest_cache/
 graphtrust_model.pkl
+

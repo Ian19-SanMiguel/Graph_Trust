@@ -16,6 +16,10 @@ export class Verification {
 		this.nationality = data.nationality;
 		this.address = data.address;
 		this.contactNumber = data.contactNumber;
+		this.businessName = data.businessName || "";
+		this.authorizedRepresentativeConfirmed = Boolean(data.authorizedRepresentativeConfirmed);
+		this.businessPermitUrl = data.businessPermitUrl || "";
+		this.taxIdUrl = data.taxIdUrl || "";
 		this.governmentIdUrl = data.governmentIdUrl;
 		this.selfieUrl = data.selfieUrl;
 		this.status = data.status || "pending";
@@ -40,6 +44,10 @@ export class Verification {
 			nationality: this.nationality,
 			address: this.address,
 			contactNumber: this.contactNumber,
+			businessName: this.businessName,
+			authorizedRepresentativeConfirmed: this.authorizedRepresentativeConfirmed,
+			businessPermitUrl: this.businessPermitUrl,
+			taxIdUrl: this.taxIdUrl,
 			governmentIdUrl: this.governmentIdUrl,
 			selfieUrl: this.selfieUrl,
 			status: this.status,
@@ -65,6 +73,10 @@ export class Verification {
 			nationality: this.nationality,
 			address: this.address,
 			contactNumber: this.contactNumber,
+			businessName: this.businessName,
+			authorizedRepresentativeConfirmed: this.authorizedRepresentativeConfirmed,
+			businessPermitUrl: this.businessPermitUrl,
+			taxIdUrl: this.taxIdUrl,
 			governmentIdUrl: this.governmentIdUrl,
 			selfieUrl: this.selfieUrl,
 			status: this.status,
@@ -78,11 +90,26 @@ export class Verification {
 
 	static async findByUserId(userId) {
 		const db = getDB();
-		const verificationRef = doc(db, VERIFICATIONS_COLLECTION, userId);
+		const normalizedUserId = String(userId || "").trim();
+		if (!normalizedUserId) {
+			return null;
+		}
+
+		const verificationRef = doc(db, VERIFICATIONS_COLLECTION, normalizedUserId);
 		const docSnap = await getDoc(verificationRef);
 
 		if (!docSnap.exists()) {
-			return null;
+			// Backward compatibility: some older records were not keyed by userId.
+			const verificationsRef = collection(db, VERIFICATIONS_COLLECTION);
+			const q = query(verificationsRef, where("userId", "==", normalizedUserId));
+			const querySnapshot = await getDocs(q);
+
+			if (querySnapshot.empty) {
+				return null;
+			}
+
+			const fallbackDoc = querySnapshot.docs[0];
+			return new Verification({ id: fallbackDoc.id, ...fallbackDoc.data() });
 		}
 
 		return new Verification({ id: docSnap.id, ...docSnap.data() });

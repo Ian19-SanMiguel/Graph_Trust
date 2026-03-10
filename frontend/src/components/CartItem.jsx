@@ -1,5 +1,6 @@
 import { Minus, Plus, Trash } from "lucide-react";
 import { useCartStore } from "../stores/useCartStore";
+import { formatPrice } from "../lib/price";
 
 const CartItem = ({ item }) => {
 	const { removeFromCart, updateQuantity } = useCartStore();
@@ -34,7 +35,7 @@ const CartItem = ({ item }) => {
 					</div>
 
 					<div className='text-end md:order-4 md:w-32'>
-						<p className='text-base font-bold text-accent-400'>${item.price}</p>
+						<p className='text-base font-bold text-accent-400'>₱{formatPrice(item.price)}</p>
 					</div>
 				</div>
 

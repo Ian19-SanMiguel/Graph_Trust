@@ -24,12 +24,13 @@ npm run dev
 3. AI Engine (Required for AI trust scoring)
 Run this in a third terminal:
 
-Shell
-cd ai-engine
-py -3.11 -m venv .venv311
-.\.venv311\Scripts\python.exe -m pip install --upgrade pip
-.\.venv311\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv311\Scripts\python.exe -m uvicorn main:app --app-dir C:\Users\njame\Downloads\mern-ecommerce-master\ai-engine --host 127.0.0.1 --port 8000 --reload
+PowerShell
+./run-ai.ps1
+
+If dependencies are already installed and you only want to start the AI engine:
+
+PowerShell
+./run-ai.ps1 -NoInstall
 
 4. AI Health Check
 From backend, verify AI engine connectivity:

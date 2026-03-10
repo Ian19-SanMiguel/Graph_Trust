@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 
 import HomePage from "./pages/HomePage";
 import SignUpPage from "./pages/SignUpPage";
@@ -16,16 +16,48 @@ import MessagesPage from "./pages/MessagesPage";
 import Navbar from "./components/Navbar";
 import { Toaster } from "react-hot-toast";
 import { useUserStore } from "./stores/useUserStore";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import LoadingSpinner from "./components/LoadingSpinner";
 import CartPage from "./pages/CartPage";
 import { useCartStore } from "./stores/useCartStore";
 import PurchaseSuccessPage from "./pages/PurchaseSuccessPage";
 import PurchaseCancelPage from "./pages/PurchaseCancelPage";
+import OrdersPage from "./pages/OrdersPage";
+import ChatbotWidget from "./components/ChatbotWidget";
 
 function App() {
 	const { user, checkAuth, checkingAuth } = useUserStore();
 	const { getCartItems } = useCartStore();
+	const normalizedKycStatus = String(user?.kycStatus || "").trim().toLowerCase();
+	const hasPendingOrHigherKyc =
+		normalizedKycStatus === "pending" || normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
+	const hasApprovedKyc = normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
+	const isPrivilegedUser = user?.role === "admin" || user?.role === "seller";
+	const mustEnableMfaForPrivileged = isPrivilegedUser && !user?.mfaEnabled;
+	const canAccessSellerHub = (user?.role === "admin" || hasPendingOrHigherKyc) && !mustEnableMfaForPrivileged;
+	const isBuyer = Boolean(user && !isPrivilegedUser);
+	const shouldNudgeBuyerMfa = isBuyer && !user?.mfaEnabled;
+	const [dismissedMfaNudge, setDismissedMfaNudge] = useState(false);
+
+	useEffect(() => {
+		if (!user?._id) {
+			setDismissedMfaNudge(false);
+			return;
+		}
+
+		const storageKey = `mfa_nudge_dismissed:${user._id}`;
+		setDismissedMfaNudge(localStorage.getItem(storageKey) === "1");
+	}, [user?._id]);
+
+	const dismissMfaNudge = () => {
+		if (!user?._id) {
+			setDismissedMfaNudge(true);
+			return;
+		}
+
+		localStorage.setItem(`mfa_nudge_dismissed:${user._id}`, "1");
+		setDismissedMfaNudge(true);
+	};
 	useEffect(() => {
 		checkAuth();
 	}, [checkAuth]);
@@ -49,17 +81,42 @@ function App() {
 
 			<div className='relative z-50 pt-20'>
 				<Navbar />
+				{shouldNudgeBuyerMfa && !dismissedMfaNudge && (
+					<div className='mx-4 md:mx-8 mt-2 mb-4 rounded-lg border border-accent-500/40 bg-accent-500/15 px-4 py-3'>
+						<div className='flex flex-col gap-2 md:flex-row md:items-center md:justify-between'>
+							<p className='text-sm text-gray-100'>
+								Secure your buyer account with MFA. It only takes a minute in Settings.
+							</p>
+							<div className='flex items-center gap-2'>
+								<Link
+									to='/settings'
+									className='rounded-md bg-accent-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-500'
+								>
+									Set Up MFA
+								</Link>
+								<button
+									type='button'
+									onClick={dismissMfaNudge}
+									className='rounded-md bg-gray-700 px-3 py-1.5 text-sm font-semibold text-gray-200 hover:bg-gray-600'
+								>
+									Later
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
 				<Routes>
 					<Route path='/' element={<HomePage />} />
 					<Route path='/signup' element={!user ? <SignUpPage /> : <Navigate to='/' />} />
 					<Route path='/login' element={!user ? <LoginPage /> : <Navigate to='/' />} />
 					<Route
 						path='/secret-dashboard'
-						element={user?.role === "admin" || user?.role === "seller" ? <AdminPage /> : <Navigate to='/login' />}
+						element={canAccessSellerHub ? <AdminPage /> : <Navigate to={user ? '/settings' : '/login'} />}
 					/>
 					<Route path='/category/:category' element={<CategoryPage />} />
 					<Route path='/product/:id' element={<ProductPage />} />
 					<Route path='/cart' element={user ? <CartPage /> : <Navigate to='/login' />} />
+					<Route path='/orders' element={user ? <OrdersPage /> : <Navigate to='/login' />} />
 					<Route path='/verified-seller' element={<VerifiedSellerPage />} />
 					<Route path='/learn-what-we-collect' element={<LearnWhatWeCollectPage />} />
 					<Route path='/how-it-works' element={<HowItWorksPage />} />
@@ -73,6 +130,7 @@ function App() {
 					<Route path='/purchase-cancel' element={user ? <PurchaseCancelPage /> : <Navigate to='/login' />} />
 				</Routes>
 			</div>
+			<ChatbotWidget />
 			<Toaster />
 		</div>
 	);

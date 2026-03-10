@@ -8,7 +8,8 @@ export class Product {
 		this._id = data.id || data._id;
 		this.name = data.name;
 		this.description = data.description;
-		this.price = data.price;
+		const parsedPrice = typeof data.price === "number" ? data.price : Number.parseFloat(data.price);
+		this.price = Number.isFinite(parsedPrice) ? parsedPrice : 0;
 		this.image = data.image;
 		this.category = data.category;
 		this.shopId = data.shopId || "";

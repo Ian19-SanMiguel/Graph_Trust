@@ -2,6 +2,23 @@ import Order from "../models/order.model.js";
 import Product from "../models/product.model.js";
 import User from "../models/user.model.js";
 
+const toDate = (value) => {
+	if (!value) return null;
+	if (value instanceof Date) return value;
+	if (typeof value === "string" || typeof value === "number") {
+		const parsed = new Date(value);
+		return Number.isNaN(parsed.getTime()) ? null : parsed;
+	}
+	if (typeof value?.seconds === "number") {
+		return new Date(value.seconds * 1000);
+	}
+	if (typeof value?.toDate === "function") {
+		const parsed = value.toDate();
+		return parsed instanceof Date && !Number.isNaN(parsed.getTime()) ? parsed : null;
+	}
+	return null;
+};
+
 export const getAnalyticsData = async () => {
 	try {
 		const users = await User.find({});
@@ -31,14 +48,17 @@ export const getDailySalesData = async (startDate, endDate) => {
 
 		// Filter orders within the date range
 		const filteredOrders = orders.filter((order) => {
-			const orderDate = new Date(order.createdAt);
+			const orderDate = toDate(order.createdAt);
+			if (!orderDate) return false;
 			return orderDate >= startDate && orderDate <= endDate;
 		});
 
 		// Group by date
 		const dailySalesMap = {};
 		filteredOrders.forEach((order) => {
-			const dateStr = new Date(order.createdAt).toISOString().split("T")[0];
+			const orderDate = toDate(order.createdAt);
+			if (!orderDate) return;
+			const dateStr = orderDate.toISOString().split("T")[0];
 			if (!dailySalesMap[dateStr]) {
 				dailySalesMap[dateStr] = { sales: 0, revenue: 0 };
 			}

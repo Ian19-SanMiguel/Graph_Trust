@@ -43,6 +43,15 @@ const VerificationsTab = () => {
 
 	const isPdfAsset = (url) => /\.pdf($|\?)/i.test(url || "");
 
+	const openPreview = (title, url) => {
+		if (!url) {
+			toast.error(`${title} is not available for this request`);
+			return;
+		}
+
+		setPreviewAsset({ title, url });
+	};
+
 	if (loading) {
 		return (
 			<div className='bg-gray-800/60 rounded-lg p-6 text-gray-300'>
@@ -89,28 +98,34 @@ const VerificationsTab = () => {
 									<p className='text-sm text-gray-300'>User ID: {verification.userId}</p>
 									<p className='text-sm text-gray-300'>Nationality: {verification.nationality}</p>
 									<p className='text-sm text-gray-300'>Contact: +63 {verification.contactNumber}</p>
+									<p className='text-sm text-gray-300'>Business: {verification.businessName || "-"}</p>
+									<p className='text-sm text-gray-300'>Authorized Representative: {verification.authorizedRepresentativeConfirmed ? "Yes" : "No"}</p>
 									<p className='text-sm text-gray-300'>Address: {verification.address}</p>
 									<div className='flex gap-4 mt-2'>
 										<button
 											type='button'
-											onClick={() =>
-												setPreviewAsset({
-													title: 'Government ID',
-													url: verification.governmentIdUrl,
-												})
-											}
+											onClick={() => openPreview('Business Permit', verification.businessPermitUrl)}
+											className='text-accent-400 hover:text-accent-300 text-sm'
+										>
+											View Business Permit
+										</button>
+										<button
+											type='button'
+											onClick={() => openPreview('Tax ID Document', verification.taxIdUrl)}
+											className='text-accent-400 hover:text-accent-300 text-sm'
+										>
+											View Tax ID
+										</button>
+										<button
+											type='button'
+											onClick={() => openPreview('Government ID', verification.governmentIdUrl)}
 											className='text-accent-400 hover:text-accent-300 text-sm'
 										>
 											View Government ID
 										</button>
 										<button
 											type='button'
-											onClick={() =>
-												setPreviewAsset({
-													title: 'Selfie',
-													url: verification.selfieUrl,
-												})
-											}
+											onClick={() => openPreview('Selfie', verification.selfieUrl)}
 											className='text-accent-400 hover:text-accent-300 text-sm'
 										>
 											View Selfie

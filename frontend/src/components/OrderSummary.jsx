@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { MoveRight } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import axios from "../lib/axios";
+import { formatPrice, toNumber } from "../lib/price";
 
 const stripePromise = loadStripe(
 	import.meta.env.VITE_STRIPE_PUBLIC_KEY
@@ -12,10 +13,12 @@ const stripePromise = loadStripe(
 const OrderSummary = () => {
 	const { total, subtotal, coupon, isCouponApplied, cart } = useCartStore();
 
-	const savings = subtotal - total;
-	const formattedSubtotal = subtotal.toFixed(2);
-	const formattedTotal = total.toFixed(2);
-	const formattedSavings = savings.toFixed(2);
+	const numericSubtotal = toNumber(subtotal);
+	const numericTotal = toNumber(total);
+	const savings = numericSubtotal - numericTotal;
+	const formattedSubtotal = formatPrice(numericSubtotal);
+	const formattedTotal = formatPrice(numericTotal);
+	const formattedSavings = formatPrice(savings);
 
 	const handlePayment = async () => {
 		try {
@@ -61,13 +64,13 @@ const OrderSummary = () => {
 				<div className='space-y-2'>
 					<dl className='flex items-center justify-between gap-4'>
 						<dt className='text-base font-normal text-gray-300'>Original price</dt>
-						<dd className='text-base font-medium text-white'>${formattedSubtotal}</dd>
+						<dd className='text-base font-medium text-white'>₱{formattedSubtotal}</dd>
 					</dl>
 
 					{savings > 0 && (
 						<dl className='flex items-center justify-between gap-4'>
 							<dt className='text-base font-normal text-gray-300'>Savings</dt>
-							<dd className='text-base font-medium text-accent-400'>-${formattedSavings}</dd>
+							<dd className='text-base font-medium text-accent-400'>-₱{formattedSavings}</dd>
 						</dl>
 					)}
 
@@ -79,7 +82,7 @@ const OrderSummary = () => {
 					)}
 					<dl className='flex items-center justify-between gap-4 border-t border-gray-600 pt-2'>
 						<dt className='text-base font-bold text-white'>Total</dt>
-						<dd className='text-base font-bold text-accent-400'>${formattedTotal}</dd>
+						<dd className='text-base font-bold text-accent-400'>₱{formattedTotal}</dd>
 					</dl>
 				</div>
 

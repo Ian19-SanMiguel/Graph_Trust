@@ -81,6 +81,23 @@ export class ChatConversation {
 		});
 	}
 
+	static async findByShopId(shopId) {
+		const db = getDB();
+		const conversationsRef = collection(db, CONVERSATIONS_COLLECTION);
+		const q = query(conversationsRef, where("shopId", "==", shopId));
+		const querySnapshot = await getDocs(q);
+
+		const conversations = querySnapshot.docs.map((conversationDoc) =>
+			new ChatConversation({ id: conversationDoc.id, ...conversationDoc.data() })
+		);
+
+		return conversations.sort((a, b) => {
+			const aSeconds = a.updatedAt?.seconds || 0;
+			const bSeconds = b.updatedAt?.seconds || 0;
+			return bSeconds - aSeconds;
+		});
+	}
+
 	static async create(data) {
 		const conversation = new ChatConversation(data);
 		await conversation.save();

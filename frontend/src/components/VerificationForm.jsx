@@ -213,14 +213,17 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [showRequiredWarning, setShowRequiredWarning] = useState(false);
 	const [isDateOfBirthTouched, setIsDateOfBirthTouched] = useState(false);
-	const [isDraggingGovernmentId, setIsDraggingGovernmentId] = useState(false);
 	const [governmentIdError, setGovernmentIdError] = useState('');
+	const [businessPermitError, setBusinessPermitError] = useState('');
+	const [taxIdError, setTaxIdError] = useState('');
 	const [selfieError, setSelfieError] = useState('');
 	const [isCameraOpen, setIsCameraOpen] = useState(false);
 	const [cameraError, setCameraError] = useState('');
 	const [selfiePreviewUrl, setSelfiePreviewUrl] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const governmentIdInputRef = useRef(null);
+	const businessPermitInputRef = useRef(null);
+	const taxIdInputRef = useRef(null);
 	const selfieVideoRef = useRef(null);
 	const cameraStreamRef = useRef(null);
 	const [formData, setFormData] = useState({
@@ -233,6 +236,10 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 		nationality: '',
 		address: '',
 		contactNumber: '',
+		businessName: '',
+		authorizedRepresentativeConfirmed: false,
+		businessPermitDoc: null,
+		taxIdDoc: null,
 		uploadedDocs: null,
 		selfieImage: null,
 	});
@@ -254,6 +261,8 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 		'nationality',
 		'address',
 		'contactNumber',
+		'businessName',
+		'authorizedRepresentativeConfirmed',
 	];
 
 	const normalizeContactNumber = (value) => {
@@ -507,10 +516,16 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 		}
 
 		if (currentStep === 1) {
+			if (businessPermitError) {
+				return businessPermitError;
+			}
+			if (taxIdError) {
+				return taxIdError;
+			}
 			if (governmentIdError) {
 				return governmentIdError;
 			}
-			return 'Please upload a government ID before proceeding.';
+			return 'Please upload business permit, tax ID, and government ID before proceeding.';
 		}
 
 		if (currentStep === 2) {
@@ -540,7 +555,7 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 		}
 
 		if (step === 1) {
-			return Boolean(formData.uploadedDocs);
+			return Boolean(formData.businessPermitDoc) && Boolean(formData.taxIdDoc) && Boolean(formData.uploadedDocs);
 		}
 
 		if (step === 2) {
@@ -551,8 +566,8 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 	};
 
 	const handleInputChange = (e) => {
-		const { name, value } = e.target;
-		let nextValue = value;
+		const { name, value, type, checked } = e.target;
+		let nextValue = type === 'checkbox' ? checked : value;
 
 		if (name === 'contactNumber') {
 			nextValue = normalizeContactNumber(value).slice(0, 11);
@@ -576,25 +591,46 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 		e.target.value = '';
 	};
 
-	const handleGovernmentIdDrop = (e) => {
-		e.preventDefault();
-		setIsDraggingGovernmentId(false);
-		const file = e.dataTransfer.files?.[0] || null;
-		handleGovernmentIdFile(file);
+	const handleBusinessPermitChange = (e) => {
+		const file = e.target.files?.[0] || null;
+		const validationError = validateFile({
+			file,
+			allowedMimeTypes: governmentIdAllowedMimeTypes,
+			allowedExtensions: governmentIdAllowedExtensions,
+			allowedLabel: 'JPG, JPEG, PNG, PDF',
+		});
+		if (validationError) {
+			setBusinessPermitError(validationError);
+			setFormData((prev) => ({ ...prev, businessPermitDoc: null }));
+		} else {
+			setBusinessPermitError('');
+			setFormData((prev) => ({ ...prev, businessPermitDoc: file }));
+		}
 		if (showRequiredWarning) {
 			setShowRequiredWarning(false);
 		}
+		e.target.value = '';
 	};
 
-	const handleRemoveGovernmentId = () => {
-		setFormData((prev) => ({
-			...prev,
-			uploadedDocs: null,
-		}));
-		setGovernmentIdError('');
+	const handleTaxIdChange = (e) => {
+		const file = e.target.files?.[0] || null;
+		const validationError = validateFile({
+			file,
+			allowedMimeTypes: governmentIdAllowedMimeTypes,
+			allowedExtensions: governmentIdAllowedExtensions,
+			allowedLabel: 'JPG, JPEG, PNG, PDF',
+		});
+		if (validationError) {
+			setTaxIdError(validationError);
+			setFormData((prev) => ({ ...prev, taxIdDoc: null }));
+		} else {
+			setTaxIdError('');
+			setFormData((prev) => ({ ...prev, taxIdDoc: file }));
+		}
 		if (showRequiredWarning) {
 			setShowRequiredWarning(false);
 		}
+		e.target.value = '';
 	};
 
 	const handleRemoveSelfie = () => {
@@ -671,7 +707,7 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 
 		setShowRequiredWarning(false);
 
-		if (!formData.uploadedDocs || !formData.selfieImage) {
+		if (!formData.uploadedDocs || !formData.selfieImage || !formData.businessPermitDoc || !formData.taxIdDoc) {
 			setShowRequiredWarning(true);
 			return;
 		}
@@ -679,7 +715,9 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 		try {
 			setIsSubmitting(true);
 
-			const [governmentIdImage, selfieImage] = await Promise.all([
+			const [businessPermitImage, taxIdImage, governmentIdImage, selfieImage] = await Promise.all([
+				fileToDataUrl(formData.businessPermitDoc),
+				fileToDataUrl(formData.taxIdDoc),
 				fileToDataUrl(formData.uploadedDocs),
 				fileToDataUrl(formData.selfieImage),
 			]);
@@ -694,6 +732,10 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 				nationality: formData.nationality,
 				address: formData.address,
 				contactNumber: formData.contactNumber,
+				businessName: formData.businessName,
+				authorizedRepresentativeConfirmed: formData.authorizedRepresentativeConfirmed,
+				businessPermitImage,
+				taxIdImage,
 				governmentIdImage,
 				selfieImage,
 			});
@@ -718,7 +760,7 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 			case 0:
 				// Info Step
 				return (
-					<div className='space-y-6'>
+						<div className='space-y-6'>
 						<div className='grid grid-cols-2 gap-4 sm:grid-cols-4'>
 							<div>
 								<label className='block text-sm font-medium text-white mb-2'>
@@ -865,35 +907,66 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 							/>
 						</div>
 
-						<div className='w-full sm:w-1/2'>
-							<label className='block text-sm font-medium text-white mb-2'>
-								Contact Number <span className='text-red-500'>*</span>
-							</label>
-							<div className='flex'>
-								<div className='relative'>
-									<select
-										className='appearance-none pl-3 pr-10 py-2 border border-gray-600 rounded-l-lg bg-gray-800 focus:outline-none text-gray-100'
-										defaultValue='+63'
-									>
-										<option value='+63'>+63</option>
-									</select>
-									<ChevronDown
-										size={16}
-										className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300'
+						<div className='grid grid-cols-1 gap-4 sm:grid-cols-2'>
+							<div>
+								<label className='block text-sm font-medium text-white mb-2'>
+									Contact Number <span className='text-red-500'>*</span>
+								</label>
+								<div className='flex'>
+									<div className='relative'>
+										<select
+											className='appearance-none pl-3 pr-10 py-2 border border-gray-600 rounded-l-lg bg-gray-800 focus:outline-none text-gray-100'
+											defaultValue='+63'
+										>
+											<option value='+63'>+63</option>
+										</select>
+										<ChevronDown
+											size={16}
+											className='pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-300'
+										/>
+									</div>
+									<input
+										type='tel'
+										name='contactNumber'
+										value={formData.contactNumber}
+										onChange={handleInputChange}
+										inputMode='numeric'
+										autoComplete='tel-national'
+										className='flex-1 px-3 py-2 border border-l-0 border-gray-600 rounded-r-lg bg-gray-800 focus:outline-none placeholder-gray-300 text-gray-100'
+										placeholder='09XXXXXXXXX or 9XXXXXXXXX'
 									/>
 								</div>
+								<p className='mt-2 text-xs text-gray-400'>Accepted format: starts with 09 or 9</p>
+							</div>
+							<div>
+								<label className='block text-sm font-medium text-white mb-2'>
+									Business Name <span className='text-red-500'>*</span>
+								</label>
 								<input
-									type='tel'
-									name='contactNumber'
-									value={formData.contactNumber}
+									type='text'
+									name='businessName'
+									value={formData.businessName}
 									onChange={handleInputChange}
-									inputMode='numeric'
-									autoComplete='tel-national'
-									className='flex-1 px-3 py-2 border border-l-0 border-gray-600 rounded-r-lg bg-gray-800 focus:outline-none placeholder-gray-300 text-gray-100'
-									placeholder='09XXXXXXXXX or 9XXXXXXXXX'
+									className='w-full px-3 py-2 border border-gray-600 rounded-lg bg-gray-800 focus:outline-none placeholder-gray-300 text-gray-100'
+									placeholder='Business Name'
 								/>
 							</div>
-							<p className='mt-2 text-xs text-gray-400'>Accepted format: starts with 09 or 9</p>
+						</div>
+
+						<div className='rounded-lg border border-gray-700 bg-gray-800/40 p-4'>
+							<label className='flex items-start gap-3 text-sm text-gray-200 cursor-pointer'>
+								<input
+									type='checkbox'
+									name='authorizedRepresentativeConfirmed'
+									checked={formData.authorizedRepresentativeConfirmed}
+									onChange={handleInputChange}
+									className='mt-0.5 h-4 w-4 rounded border-gray-500 bg-gray-900 text-accent-500 focus:ring-accent-500'
+								/>
+								<span>
+									I confirm that I am the business owner or an authorized representative of this business
+									<span className='text-red-500'>*</span>.
+								</span>
+							</label>
 						</div>
 					</div>
 				);
@@ -902,56 +975,73 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 				// Upload Documents Step
 				return (
 					<div className='space-y-6 py-12 text-center'>
-						<h3 className='text-lg font-semibold text-white'>Upload Government ID</h3>
-						<div
-							onDragOver={(e) => {
-								e.preventDefault();
-								setIsDraggingGovernmentId(true);
-							}}
-							onDragLeave={(e) => {
-								e.preventDefault();
-								setIsDraggingGovernmentId(false);
-							}}
-							onDrop={handleGovernmentIdDrop}
-							className={`border-2 border-dashed rounded-lg p-8 transition-colors ${
-								isDraggingGovernmentId
-									? 'border-accent-400 bg-accent-400/10'
-									: 'border-gray-600'
-							}`}
-						>
-							<p className='text-gray-300 mb-4'>Drag and drop your documents here or click to upload</p>
-							<input
-								type='file'
-								ref={governmentIdInputRef}
-								onChange={handleGovernmentIdChange}
-								className='hidden'
-								accept='.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf'
-							/>
-							<button
-								type='button'
-								onClick={() => governmentIdInputRef.current?.click()}
-								className='bg-accent-400 hover:bg-accent-300 text-white px-6 py-2 rounded-lg font-semibold'
-							>
-								Choose File
-							</button>
-							{formData.uploadedDocs && (
-								<div className='mt-3 relative mx-auto w-full max-w-[12rem] rounded-lg border border-gray-700 bg-gray-800/50 px-3 py-2'>
-									<p className='text-sm text-green-400 pr-6'>Selected: {formData.uploadedDocs.name}</p>
-									<button
-										type='button'
-										onClick={handleRemoveGovernmentId}
-										className='absolute right-2 top-2 text-gray-400 hover:text-red-400 transition-colors'
-										aria-label='Remove uploaded government ID'
-									>
-										<X size={14} />
-									</button>
-								</div>
-							)}
-							{governmentIdError && (
-								<p className='text-sm text-red-400 mt-3'>{governmentIdError}</p>
-							)}
+						<h3 className='text-lg font-semibold text-white'>Upload Business Documents</h3>
+						<div className='grid gap-4 md:grid-cols-3'>
+							<div className='rounded-lg border border-gray-700 bg-gray-800/40 p-4 text-left'>
+								<p className='text-sm font-semibold text-white mb-2'>Business Permit</p>
+								<input
+									type='file'
+									ref={businessPermitInputRef}
+									onChange={handleBusinessPermitChange}
+									className='hidden'
+									accept='.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf'
+								/>
+								<button
+									type='button'
+									onClick={() => businessPermitInputRef.current?.click()}
+									className='w-full bg-accent-400 hover:bg-accent-300 text-white px-4 py-2 rounded-lg font-semibold'
+								>
+									Choose File
+								</button>
+								<p className='mt-2 text-xs text-gray-300'>
+									{formData.businessPermitDoc ? formData.businessPermitDoc.name : 'No file selected'}
+								</p>
+								{businessPermitError && <p className='mt-2 text-xs text-red-400'>{businessPermitError}</p>}
+							</div>
+							<div className='rounded-lg border border-gray-700 bg-gray-800/40 p-4 text-left'>
+								<p className='text-sm font-semibold text-white mb-2'>Tax ID Document</p>
+								<input
+									type='file'
+									ref={taxIdInputRef}
+									onChange={handleTaxIdChange}
+									className='hidden'
+									accept='.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf'
+								/>
+								<button
+									type='button'
+									onClick={() => taxIdInputRef.current?.click()}
+									className='w-full bg-accent-400 hover:bg-accent-300 text-white px-4 py-2 rounded-lg font-semibold'
+								>
+									Choose File
+								</button>
+								<p className='mt-2 text-xs text-gray-300'>
+									{formData.taxIdDoc ? formData.taxIdDoc.name : 'No file selected'}
+								</p>
+								{taxIdError && <p className='mt-2 text-xs text-red-400'>{taxIdError}</p>}
+							</div>
+							<div className='rounded-lg border border-gray-700 bg-gray-800/40 p-4 text-left'>
+								<p className='text-sm font-semibold text-white mb-2'>Government ID</p>
+								<input
+									type='file'
+									ref={governmentIdInputRef}
+									onChange={handleGovernmentIdChange}
+									className='hidden'
+									accept='.jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf'
+								/>
+								<button
+									type='button'
+									onClick={() => governmentIdInputRef.current?.click()}
+									className='w-full bg-accent-400 hover:bg-accent-300 text-white px-4 py-2 rounded-lg font-semibold'
+								>
+									Choose File
+								</button>
+								<p className='mt-2 text-xs text-gray-300'>
+									{formData.uploadedDocs ? formData.uploadedDocs.name : 'No file selected'}
+								</p>
+								{governmentIdError && <p className='mt-2 text-xs text-red-400'>{governmentIdError}</p>}
+							</div>
 						</div>
-						<p className='text-xs text-gray-400'>Accepted formats: JPG, PNG, PDF (Max 10MB)</p>
+						<p className='text-xs text-gray-400'>Accepted formats: JPG, PNG, PDF (Max 10MB per document)</p>
 					</div>
 				);
 
@@ -1046,6 +1136,16 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 									<p className='text-xs uppercase tracking-wide text-gray-400'>Address</p>
 									<p className='mt-1 font-semibold text-white'>{formData.address}</p>
 								</div>
+								<div className='bg-gray-900/40 rounded-lg p-4 border border-gray-700/80'>
+									<p className='text-xs uppercase tracking-wide text-gray-400'>Business Name</p>
+									<p className='mt-1 font-semibold text-white'>{formData.businessName}</p>
+								</div>
+								<div className='bg-gray-900/40 rounded-lg p-4 border border-gray-700/80'>
+									<p className='text-xs uppercase tracking-wide text-gray-400'>Authorization</p>
+									<p className='mt-1 font-semibold text-white'>
+										{formData.authorizedRepresentativeConfirmed ? 'Confirmed' : 'Not confirmed'}
+									</p>
+								</div>
 							</div>
 						</div>
 						<p className='text-sm text-gray-400'>
@@ -1115,7 +1215,7 @@ const VerificationForm = ({ onClose, onSubmitted }) => {
 				</div>
 
 				{/* Content */}
-			<div className='p-8 h-[500px] overflow-hidden'>
+			<div className='p-8 h-[560px] overflow-hidden'>
 				<motion.div
 					key={currentStep}
 					initial={{ opacity: 0, x: 20 }}

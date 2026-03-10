@@ -16,7 +16,17 @@ export class User {
         
         this.kycStatus = data.kycStatus || "Pending"; 
         this.trustScore = data.trustScore !== undefined ? data.trustScore : 0.0;
+        this.aiTrustScoringMode = data.aiTrustScoringMode || "";
+        this.aiTrustModelExists = Boolean(data.aiTrustModelExists || false);
+        this.aiTrustUpdatedAt = data.aiTrustUpdatedAt || null;
         this.deviceId = data.deviceId || "";
+        this.mfaEnabled = Boolean(data.mfaEnabled || false);
+        this.mfaSecret = data.mfaSecret || "";
+        this.storefrontName = data.storefrontName || data.name || "Shop";
+        this.storefrontTagline = data.storefrontTagline || "";
+        this.storefrontDescription = data.storefrontDescription || "";
+        this.storefrontLogoUrl = data.storefrontLogoUrl || "";
+        this.storefrontBannerUrl = data.storefrontBannerUrl || "";
        
 
         this.createdAt = data.createdAt;
@@ -36,7 +46,17 @@ export class User {
             
             kycStatus: this.kycStatus,
             trustScore: this.trustScore,
+            aiTrustScoringMode: this.aiTrustScoringMode,
+            aiTrustModelExists: this.aiTrustModelExists,
+            aiTrustUpdatedAt: this.aiTrustUpdatedAt,
             deviceId: this.deviceId,
+            mfaEnabled: this.mfaEnabled,
+            mfaSecret: this.mfaSecret,
+            storefrontName: this.storefrontName,
+            storefrontTagline: this.storefrontTagline,
+            storefrontDescription: this.storefrontDescription,
+            storefrontLogoUrl: this.storefrontLogoUrl,
+            storefrontBannerUrl: this.storefrontBannerUrl,
             
 
             createdAt: this.createdAt || serverTimestamp(),
@@ -60,7 +80,16 @@ export class User {
            
             kycStatus: this.kycStatus,
             trustScore: this.trustScore,
+            aiTrustScoringMode: this.aiTrustScoringMode,
+            aiTrustModelExists: this.aiTrustModelExists,
+            aiTrustUpdatedAt: this.aiTrustUpdatedAt,
             deviceId: this.deviceId,
+            mfaEnabled: this.mfaEnabled,
+            storefrontName: this.storefrontName,
+            storefrontTagline: this.storefrontTagline,
+            storefrontDescription: this.storefrontDescription,
+            storefrontLogoUrl: this.storefrontLogoUrl,
+            storefrontBannerUrl: this.storefrontBannerUrl,
             
 
             createdAt: this.createdAt,
@@ -92,6 +121,22 @@ export class User {
         }
 
         return new User({ id: docSnap.id, ...docSnap.data() });
+    }
+
+    static async find(filter = {}) {
+        const db = getDB();
+        const usersRef = collection(db, USERS_COLLECTION);
+        let q = usersRef;
+
+        if (Object.keys(filter).length > 0) {
+            const conditions = Object.entries(filter).map(([key, value]) => where(key, "==", value));
+            q = query(usersRef, ...conditions);
+        } else {
+            q = query(usersRef);
+        }
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map((docSnap) => new User({ id: docSnap.id, ...docSnap.data() }));
     }
 
     static async create(data) {

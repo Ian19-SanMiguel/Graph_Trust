@@ -1,0 +1,90 @@
+Random Forest first tree rules (max depth 4)
+============================================================
+|--- shared_identity_count <= 1.50
+|   |--- report_signal_count <= 6.50
+|   |   |--- identity_connections <= 3.50
+|   |   |   |--- report_signal_count <= 3.50
+|   |   |   |   |--- unique_counterparties <= 19.50
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |   |   |--- unique_counterparties >  19.50
+|   |   |   |   |   |--- truncated branch of depth 5
+|   |   |   |--- report_signal_count >  3.50
+|   |   |   |   |--- unique_counterparties <= 33.50
+|   |   |   |   |   |--- truncated branch of depth 4
+|   |   |   |   |--- unique_counterparties >  33.50
+|   |   |   |   |   |--- value: [3.22]
+|   |   |--- identity_connections >  3.50
+|   |   |   |--- low_rating_ratio <= 0.45
+|   |   |   |   |--- total_connections <= 3.50
+|   |   |   |   |   |--- value: [3.57]
+|   |   |   |   |--- total_connections >  3.50
+|   |   |   |   |   |--- truncated branch of depth 5
+|   |   |   |--- low_rating_ratio >  0.45
+|   |   |   |   |--- low_rating_ratio <= 0.51
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |   |   |--- low_rating_ratio >  0.51
+|   |   |   |   |   |--- truncated branch of depth 6
+|   |--- report_signal_count >  6.50
+|   |   |--- identity_connections <= 5.50
+|   |   |   |--- report_signal_count <= 8.50
+|   |   |   |   |--- shared_identity_count <= 0.50
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |   |   |--- shared_identity_count >  0.50
+|   |   |   |   |   |--- value: [2.08]
+|   |   |   |--- report_signal_count >  8.50
+|   |   |   |   |--- shared_identity_count <= 0.50
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |   |   |--- shared_identity_count >  0.50
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |--- identity_connections >  5.50
+|   |   |   |--- shared_identity_count <= 0.50
+|   |   |   |   |--- low_rating_ratio <= 0.14
+|   |   |   |   |   |--- value: [1.65]
+|   |   |   |   |--- low_rating_ratio >  0.14
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |   |--- shared_identity_count >  0.50
+|   |   |   |   |--- unique_counterparties <= 35.50
+|   |   |   |   |   |--- truncated branch of depth 2
+|   |   |   |   |--- unique_counterparties >  35.50
+|   |   |   |   |   |--- value: [0.62]
+|--- shared_identity_count >  1.50
+|   |--- report_signal_count <= 2.50
+|   |   |--- low_rating_ratio <= 0.41
+|   |   |   |--- low_rating_ratio <= 0.02
+|   |   |   |   |--- value: [0.18]
+|   |   |   |--- low_rating_ratio >  0.02
+|   |   |   |   |--- identity_connections <= 2.50
+|   |   |   |   |   |--- truncated branch of depth 4
+|   |   |   |   |--- identity_connections >  2.50
+|   |   |   |   |   |--- truncated branch of depth 7
+|   |   |--- low_rating_ratio >  0.41
+|   |   |   |--- shared_identity_count <= 4.50
+|   |   |   |   |--- total_connections <= 54.50
+|   |   |   |   |   |--- truncated branch of depth 2
+|   |   |   |   |--- total_connections >  54.50
+|   |   |   |   |   |--- truncated branch of depth 4
+|   |   |   |--- shared_identity_count >  4.50
+|   |   |   |   |--- value: [0.00]
+|   |--- report_signal_count >  2.50
+|   |   |--- identity_connections <= 4.50
+|   |   |   |--- report_signal_count <= 4.50
+|   |   |   |   |--- shared_identity_count <= 2.50
+|   |   |   |   |   |--- truncated branch of depth 4
+|   |   |   |   |--- shared_identity_count >  2.50
+|   |   |   |   |   |--- truncated branch of depth 2
+|   |   |   |--- report_signal_count >  4.50
+|   |   |   |   |--- low_rating_ratio <= 0.15
+|   |   |   |   |   |--- truncated branch of depth 3
+|   |   |   |   |--- low_rating_ratio >  0.15
+|   |   |   |   |   |--- truncated branch of depth 8
+|   |   |--- identity_connections >  4.50
+|   |   |   |--- low_rating_ratio <= 0.07
+|   |   |   |   |--- shared_identity_count <= 2.50
+|   |   |   |   |   |--- value: [0.33]
+|   |   |   |   |--- shared_identity_count >  2.50
+|   |   |   |   |   |--- value: [0.33]
+|   |   |   |--- low_rating_ratio >  0.07
+|   |   |   |   |--- unique_counterparties <= 30.00
+|   |   |   |   |   |--- value: [0.00]
+|   |   |   |   |--- unique_counterparties >  30.00
+|   |   |   |   |   |--- truncated branch of depth 7

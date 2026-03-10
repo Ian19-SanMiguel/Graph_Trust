@@ -6,6 +6,8 @@ export const useUserStore = create((set, get) => ({
 	user: null,
 	loading: false,
 	checkingAuth: true,
+	mfaRequired: false,
+	mfaTicket: "",
 
 	signup: async ({ name, email, password, confirmPassword }) => {
 		set({ loading: true });
@@ -17,7 +19,7 @@ export const useUserStore = create((set, get) => ({
 
 		try {
 			const res = await axios.post("/auth/signup", { name, email, password });
-			set({ user: res.data, loading: false });
+			set({ user: res.data, loading: false, mfaRequired: false, mfaTicket: "" });
 		} catch (error) {
 			set({ loading: false });
 			toast.error(error.response.data.message || "An error occurred");
@@ -28,18 +30,55 @@ export const useUserStore = create((set, get) => ({
 
 		try {
 			const res = await axios.post("/auth/login", { email, password });
+			if (res.data?.mfaRequired) {
+				set({
+					loading: false,
+					mfaRequired: true,
+					mfaTicket: res.data.mfaTicket || "",
+					user: null,
+				});
+				return { mfaRequired: true };
+			}
 
-			set({ user: res.data, loading: false });
+			set({ user: res.data, loading: false, mfaRequired: false, mfaTicket: "" });
+			return { mfaRequired: false };
 		} catch (error) {
 			set({ loading: false });
 			toast.error(error.response.data.message || "An error occurred");
+			return { mfaRequired: false, error: true };
 		}
+	},
+
+	verifyMfaLogin: async (token) => {
+		set({ loading: true });
+		try {
+			const mfaTicket = get().mfaTicket;
+			const res = await axios.post("/auth/login-mfa", { mfaTicket, token });
+			set({
+				user: res.data,
+				loading: false,
+				mfaRequired: false,
+				mfaTicket: "",
+			});
+			return { success: true };
+		} catch (error) {
+			set({ loading: false });
+			toast.error(error.response?.data?.message || "Invalid MFA code");
+			return { success: false };
+		}
+	},
+
+	cancelMfaChallenge: () => {
+		set({ mfaRequired: false, mfaTicket: "", loading: false });
 	},
 
 	logout: async () => {
 		try {
 			await axios.post("/auth/logout");
-			set({ user: null });
+			set({ user: null, mfaRequired: false, mfaTicket: "" });
+			if (window.location.pathname !== "/login") {
+				window.location.assign("/login");
+			}
 		} catch (error) {
 			toast.error(error.response?.data?.message || "An error occurred during logout");
 		}
@@ -49,10 +88,10 @@ export const useUserStore = create((set, get) => ({
 		set({ checkingAuth: true });
 		try {
 			const response = await axios.get("/auth/profile");
-			set({ user: response.data, checkingAuth: false });
+			set({ user: response.data, checkingAuth: false, mfaRequired: false, mfaTicket: "" });
 		} catch (error) {
 			console.log(error.message);
-			set({ checkingAuth: false, user: null });
+			set({ checkingAuth: false, user: null, mfaRequired: false, mfaTicket: "" });
 		}
 	},
 

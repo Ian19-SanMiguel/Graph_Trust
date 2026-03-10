@@ -4,9 +4,11 @@ import axios from "../lib/axios";
 
 export const useProductStore = create((set) => ({
 	products: [],
+	categories: [],
 	loading: false,
 
 	setProducts: (products) => set({ products }),
+	setCategories: (categories) => set({ categories }),
 	createProduct: async (productData) => {
 		set({ loading: true });
 		try {
@@ -16,8 +18,26 @@ export const useProductStore = create((set) => ({
 				loading: false,
 			}));
 		} catch (error) {
-			toast.error(error.response.data.error);
+			toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to create product");
 			set({ loading: false });
+		}
+	},
+	updateProduct: async (productId, productData) => {
+		set({ loading: true });
+		try {
+			const res = await axios.put(`/products/${productId}`, productData);
+			set((prevState) => ({
+				products: prevState.products.map((product) =>
+					product._id === productId ? { ...product, ...res.data } : product
+				),
+				loading: false,
+			}));
+			toast.success("Product updated");
+			return res.data;
+		} catch (error) {
+			set({ loading: false });
+			toast.error(error.response?.data?.message || "Failed to update product");
+			throw error;
 		}
 	},
 	fetchAllProducts: async () => {
@@ -87,6 +107,30 @@ export const useProductStore = create((set) => ({
 		} catch (error) {
 			set({ error: "Failed to fetch products", loading: false });
 			console.log("Error fetching featured products:", error);
+		}
+	},
+	fetchCategories: async () => {
+		try {
+			const response = await axios.get("/categories");
+			set({ categories: response.data?.categories || [] });
+		} catch (error) {
+			toast.error(error.response?.data?.message || "Failed to fetch categories");
+		}
+	},
+	createCategory: async (payload) => {
+		set({ loading: true });
+		try {
+			const response = await axios.post("/categories", payload);
+			set((prevState) => ({
+				categories: [...prevState.categories, response.data],
+				loading: false,
+			}));
+			toast.success("Category created");
+			return response.data;
+		} catch (error) {
+			set({ loading: false });
+			toast.error(error.response?.data?.message || "Failed to create category");
+			throw error;
 		}
 	},
 }));

@@ -13,6 +13,7 @@ const AnalyticsTab = () => {
 	});
 	const [isLoading, setIsLoading] = useState(true);
 	const [dailySalesData, setDailySalesData] = useState([]);
+	const [errorMessage, setErrorMessage] = useState("");
 
 	useEffect(() => {
 		const fetchAnalyticsData = async () => {
@@ -22,6 +23,7 @@ const AnalyticsTab = () => {
 				setDailySalesData(response.data.dailySalesData);
 			} catch (error) {
 				console.error("Error fetching analytics data:", error);
+				setErrorMessage(error.response?.data?.message || "Unable to load analytics right now");
 			} finally {
 				setIsLoading(false);
 			}
@@ -31,7 +33,11 @@ const AnalyticsTab = () => {
 	}, []);
 
 	if (isLoading) {
-		return <div>Loading...</div>;
+		return <div className='text-sm text-gray-300'>Loading analytics...</div>;
+	}
+
+	if (errorMessage) {
+		return <div className='rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-200'>{errorMessage}</div>;
 	}
 
 	return (
@@ -57,7 +63,7 @@ const AnalyticsTab = () => {
 				/>
 				<AnalyticsCard
 					title='Total Revenue'
-					value={`$${analyticsData.totalRevenue.toLocaleString()}`}
+					value={`₱${analyticsData.totalRevenue.toLocaleString()}`}
 					icon={DollarSign}
 					color='from-accent-500 to-violet-700'
 				/>
@@ -71,7 +77,7 @@ const AnalyticsTab = () => {
 				<ResponsiveContainer width='100%' height={400}>
 					<LineChart data={dailySalesData}>
 						<CartesianGrid strokeDasharray='3 3' />
-						<XAxis dataKey='name' stroke='#D1D5DB' />
+						<XAxis dataKey='date' stroke='#D1D5DB' />
 						<YAxis yAxisId='left' stroke='#D1D5DB' />
 						<YAxis yAxisId='right' orientation='right' stroke='#D1D5DB' />
 						<Tooltip />

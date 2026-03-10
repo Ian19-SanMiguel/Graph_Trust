@@ -1,8 +1,8 @@
 import Product from "../models/product.model.js";
 import Review from "../models/review.model.js";
-import User from "../models/user.model.js";
+import { recalculateAiTrustForUsers, sendReviewGraphEvent } from "../utils/aiTrust.js";
 
-const REQUIRE_AI_TRUST = String(process.env.REQUIRE_AI_TRUST || "false").toLowerCase() === "true";
+const REQUIRE_AI_TRUST = String(process.env.REQUIRE_AI_TRUST || "true").toLowerCase() === "true";
 
 const isValidRating = (value) => {
 	if (!Number.isFinite(value) || value < 1 || value > 5) {
@@ -20,20 +20,6 @@ const summarizeReviews = (reviews) => {
 			: Number((reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / totalReviews).toFixed(1));
 
 	return { totalReviews, averageRating };
-};
-
-const applyLocalTrustDelta = async (userId, rating) => {
-	const targetUserId = String(userId || "").trim();
-	if (!targetUserId) return;
-
-	const user = await User.findById(targetUserId);
-	if (!user) return;
-
-	const currentScore = Number(user.trustScore || 0);
-	const ratingValue = Number(rating || 0);
-	const delta = Math.max(0.05, Math.min(0.3, ratingValue * 0.05));
-	user.trustScore = Number(Math.min(5, currentScore + delta).toFixed(2));
-	await user.save();
 };
 
 export const getReviewsByProduct = async (req, res) => {
@@ -100,42 +86,19 @@ export const submitReview = async (req, res) => {
 		let trustUpdatedByAI = false;
 
 		try {
-			const aiReviewResponse = await fetch("http://localhost:8000/reviews/submit", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					buyer_id: String(userId),
-					seller_id: String(product.shopId || ""),
-					product_id: String(productId),
-					order_item_id: String(review._id || ""),
-					rating: normalizedRating,
-					comment: normalizedComment,
-				}),
+			await sendReviewGraphEvent({
+				buyerId: String(userId),
+				sellerId: String(product.shopId || ""),
+				productId: String(productId),
+				orderItemId: String(review._id || ""),
+				rating: normalizedRating,
+				comment: normalizedComment,
 			});
 
-			if (aiReviewResponse.ok) {
-				const userIdsToRescore = [String(userId), String(product.shopId || "")].filter(Boolean);
-
-				for (const participantUserId of userIdsToRescore) {
-					const aiRescoreResponse = await fetch("http://localhost:8000/trust/recalculate", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ user_id: participantUserId }),
-					});
-
-					if (!aiRescoreResponse.ok) {
-						continue;
-					}
-
-					const aiRescoreData = await aiRescoreResponse.json();
-					const participantUser = await User.findById(participantUserId);
-					if (participantUser) {
-						participantUser.trustScore = aiRescoreData.trust_score;
-						await participantUser.save();
-						trustUpdatedByAI = true;
-						trustSource = "ai";
-					}
-				}
+			const updates = await recalculateAiTrustForUsers([String(userId), String(product.shopId || "")]);
+			if (updates.length > 0) {
+				trustUpdatedByAI = true;
+				trustSource = "ai";
 			}
 		} catch (aiError) {
 			console.log("⚠️ AI trust re-score unavailable after review submission.");
@@ -154,10 +117,6 @@ export const submitReview = async (req, res) => {
 					trustUpdated: false,
 				});
 			}
-
-			await applyLocalTrustDelta(userId, normalizedRating);
-			await applyLocalTrustDelta(product.shopId, normalizedRating);
-			trustSource = "fallback";
 		}
 
 		return res.status(existingReview ? 200 : 201).json({

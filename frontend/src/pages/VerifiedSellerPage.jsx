@@ -10,9 +10,12 @@ const VerifiedSellerPage = () => {
     const [showVerificationForm, setShowVerificationForm] = useState(false);
     const [verificationStatus, setVerificationStatus] = useState("not_submitted");
     const { user } = useUserStore();
+    const needsMfaSetup = Boolean(user && !user.mfaEnabled);
     const isVerificationPending = verificationStatus === "pending";
     const isVerificationApproved = verificationStatus === "approved";
     const isVerificationRejected = verificationStatus === "rejected";
+    const trustScoringMode = String(user?.aiTrustScoringMode || "").toLowerCase();
+    const trustSourceLabel = trustScoringMode === "ml" ? "AI model" : "fallback";
 
     useEffect(() => {
         const loadVerificationStatus = async () => {
@@ -72,6 +75,23 @@ const VerifiedSellerPage = () => {
                             <span className={`text-lg font-bold ${user.trustScore >= 3.0 ? 'text-green-400' : 'text-yellow-400'}`}>
                                 {user.trustScore !== undefined ? user.trustScore.toFixed(1) : "0.0"} / 5.0
                             </span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trustScoringMode === "ml" ? "bg-green-600/20 text-green-300" : "bg-yellow-600/20 text-yellow-300"}`}>
+                                {trustSourceLabel}
+                            </span>
+                        </div>
+                    )}
+
+                    {needsMfaSetup && (
+                        <div className='mt-4 rounded-lg border border-accent-500/40 bg-accent-500/15 p-3 text-sm text-gray-100'>
+                            <div className='flex flex-wrap items-center justify-between gap-2'>
+                                <p>MFA setup is required before you can sell. Enable it in Settings to continue with seller access.</p>
+                                <Link
+                                    to='/settings'
+                                    className='rounded-md bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-500'
+                                >
+                                    Set Up MFA
+                                </Link>
+                            </div>
                         </div>
                     )}
                     {/* ----------------------------- */}

@@ -1,23 +1,67 @@
-import { ShoppingCart, UserPlus, LogIn, LogOut, Lock, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle, MessageCircle, ShoppingCart, LogIn, LogOut, Lock, Menu, User, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useUserStore } from "../stores/useUserStore";
 import { useCartStore } from "../stores/useCartStore";
+import axios from "../lib/axios";
 
 const Navbar = () => {
 	const [isBurgerOpen, setIsBurgerOpen] = useState(false);
+	const [isProfileOpen, setIsProfileOpen] = useState(false);
+	const [isVerifiedSeller, setIsVerifiedSeller] = useState(false);
 	const { user, logout } = useUserStore();
 	const isAdmin = user?.role === "admin";
 	const isSeller = user?.role === "seller";
-	const canOpenDashboard = isAdmin || isSeller;
+	const mustEnableMfaForPrivileged = (isAdmin || isSeller) && !user?.mfaEnabled;
+	const normalizedKycStatus = String(user?.kycStatus || "").trim().toLowerCase();
+	const hasPendingOrHigherKyc =
+		normalizedKycStatus === "pending" || normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
+	const hasApprovedKyc = normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
+	const hasVerifiedBadge = isSeller && isVerifiedSeller;
+	const canOpenDashboard = (isAdmin || hasPendingOrHigherKyc) && !mustEnableMfaForPrivileged;
 	const { cart } = useCartStore();
 	const linkClassName = "text-gray-300 transition duration-300 ease-in-out";
+	const accountDisplayName = user?.name || user?.email || "Account";
+	const accountEmail = user?.email || "Not signed in";
 
-	const closeMenu = () => setIsBurgerOpen(false);
+	const closeMenu = () => {
+		setIsBurgerOpen(false);
+		setIsProfileOpen(false);
+	};
 	const handleLogout = () => {
 		logout();
 		closeMenu();
 	};
+
+	useEffect(() => {
+		let ignore = false;
+
+		const loadVerificationStatus = async () => {
+			if (!user || user.role === "admin") {
+				if (!ignore) {
+					setIsVerifiedSeller(false);
+				}
+				return;
+			}
+
+			try {
+				const response = await axios.get("/verifications/me");
+				if (!ignore) {
+					setIsVerifiedSeller(String(response.data?.status || "").trim().toLowerCase() === "approved");
+				}
+			} catch {
+				if (!ignore) {
+					setIsVerifiedSeller(false);
+				}
+			}
+		};
+
+		loadVerificationStatus();
+
+		return () => {
+			ignore = true;
+		};
+	}, [user?._id, user?.role]);
 
 	return (
 		<header
@@ -26,41 +70,32 @@ const Navbar = () => {
 		>
 			<div className='container mx-auto px-4 py-3 relative'>
 				<div className='flex items-center justify-between'>
-					<Link
-						to='/'
-						onClick={closeMenu}
-						className='text-2xl font-bold items-center space-x-2 flex'
-						style={{ color: "#8F5BFF" }}
-					>
-						E-Commerce
-					</Link>
-
-					<nav className='hidden md:flex items-center gap-4'>
+					<div className='flex items-center gap-3'>
 						<Link
 							to='/'
-							className={linkClassName}
-							onMouseEnter={(event) => (event.currentTarget.style.color = "#8F5BFF")}
-							onMouseLeave={(event) => (event.currentTarget.style.color = "rgb(209, 213, 219)")}
+							onClick={closeMenu}
+							className='text-2xl font-bold items-center space-x-2 flex'
+							style={{ color: "#8F5BFF" }}
 						>
-							Home
+							<img
+								src='/graphtrust-logo.png'
+								alt='GraphTrust logo'
+								className='h-6 w-6 rounded object-contain'
+							/>
+							GraphTrust
 						</Link>
-						{user && (
-							<Link
-								to='/verified-seller'
-								className={linkClassName}
-								onMouseEnter={(event) => (event.currentTarget.style.color = "#8F5BFF")}
-								onMouseLeave={(event) => (event.currentTarget.style.color = "rgb(209, 213, 219)")}
-							>
-								Be a Seller
-							</Link>
-						)}
+					</div>
+
+					<div className='flex items-center gap-3'>
+						<nav className='hidden md:flex items-center gap-4 ml-auto'>
 						{user && (
 							<Link
 								to='/messages'
-								className={linkClassName}
+								className={`${linkClassName} inline-flex items-center gap-1`}
 								onMouseEnter={(event) => (event.currentTarget.style.color = "#8F5BFF")}
 								onMouseLeave={(event) => (event.currentTarget.style.color = "rgb(209, 213, 219)")}
 							>
+								<MessageCircle size={16} />
 								Chats
 							</Link>
 						)}
@@ -95,26 +130,48 @@ const Navbar = () => {
 								<span className='hidden sm:inline'>{isAdmin ? "Admin" : "Seller"} Hub</span>
 							</Link>
 						)}
-					</nav>
+						</nav>
 
-					<button
-						type='button'
-						className='text-gray-200 hover:text-white'
-						onClick={() => setIsBurgerOpen((prev) => !prev)}
-						aria-label='Toggle menu'
-					>
-						{isBurgerOpen ? <X size={24} /> : <Menu size={24} />}
-					</button>
+						<button
+							type='button'
+							className='text-gray-200 hover:text-white'
+							onClick={() => {
+								setIsProfileOpen(false);
+								setIsBurgerOpen((prev) => !prev);
+							}}
+							aria-label='Toggle menu'
+						>
+							{isBurgerOpen ? <X size={24} /> : <Menu size={24} />}
+						</button>
+
+						<button
+							type='button'
+							onClick={() => {
+								setIsBurgerOpen(false);
+								setIsProfileOpen((prev) => !prev);
+							}}
+							className='inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-700 bg-gray-800/80 text-gray-100 hover:border-accent-500/60 hover:bg-gray-800'
+							aria-label='Open profile menu'
+						>
+							<User size={16} />
+						</button>
+					</div>
 				</div>
 
 				{isBurgerOpen && (
 					<div className='absolute right-4 top-16 w-56 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl z-50 overflow-hidden'>
 						<Link to='/' onClick={closeMenu} className='block px-4 py-3 text-gray-200 hover:bg-gray-800'>
-							Home
-						</Link>
-						<Link to='/' onClick={closeMenu} className='block px-4 py-3 text-gray-200 hover:bg-gray-800'>
 							Marketplace
 						</Link>
+						{user && (
+							<Link
+								to='/verified-seller'
+								onClick={closeMenu}
+								className='block px-4 py-3 text-gray-200 hover:bg-gray-800'
+							>
+								Be a Seller
+							</Link>
+						)}
 						<Link
 							to='/how-it-works'
 							onClick={closeMenu}
@@ -122,23 +179,61 @@ const Navbar = () => {
 						>
 							How It Works
 						</Link>
-						<Link
-							to='/settings'
-							onClick={closeMenu}
-							className='block px-4 py-3 text-gray-200 hover:bg-gray-800'
-						>
-							Settings
-						</Link>
-						<div className='border-t border-gray-700' />
-						{user ? (
-							<button
-								type='button'
-								onClick={handleLogout}
-								className='w-full text-left px-4 py-3 text-red-300 hover:bg-gray-800 flex items-center gap-2'
+						{user && (
+							<Link
+								to='/orders'
+								onClick={closeMenu}
+								className='block px-4 py-3 text-gray-200 hover:bg-gray-800'
 							>
-								<LogOut size={16} />
-								Sign Out
-							</button>
+								Orders
+							</Link>
+						)}
+						{!user && (
+							<Link
+								to='/login'
+								onClick={closeMenu}
+								className='block px-4 py-3 text-gray-200 hover:bg-gray-800'
+							>
+								<span className='inline-flex items-center gap-2'>
+									<LogIn size={16} />
+									Sign In
+								</span>
+							</Link>
+						)}
+					</div>
+				)}
+
+				{isProfileOpen && (
+					<div className='absolute right-4 top-16 w-64 rounded-xl border border-gray-700 bg-gray-900 shadow-2xl z-50 overflow-hidden'>
+						<div className='px-4 py-3 border-b border-gray-700'>
+							<div className='flex items-center gap-2'>
+								<p className='truncate text-sm font-semibold text-gray-100'>{accountDisplayName}</p>
+								{hasVerifiedBadge && (
+									<span className='inline-flex items-center gap-1 rounded-md border border-green-500/50 bg-green-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-green-300'>
+										<CheckCircle size={12} /> Verified Seller
+									</span>
+								)}
+							</div>
+							<p className='truncate text-xs text-gray-400'>{accountEmail}</p>
+						</div>
+						{user ? (
+							<>
+								<Link
+									to='/settings'
+									onClick={closeMenu}
+									className='block px-4 py-3 text-gray-200 hover:bg-gray-800'
+								>
+									Settings
+								</Link>
+								<button
+									type='button'
+									onClick={handleLogout}
+									className='w-full text-left px-4 py-3 text-red-300 hover:bg-gray-800 flex items-center gap-2'
+								>
+									<LogOut size={16} />
+									Sign Out
+								</button>
+							</>
 						) : (
 							<Link
 								to='/login'

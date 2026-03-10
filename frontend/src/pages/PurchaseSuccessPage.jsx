@@ -9,16 +9,37 @@ const PurchaseSuccessPage = () => {
 	const [isProcessing, setIsProcessing] = useState(true);
 	const { clearCart } = useCartStore();
 	const [error, setError] = useState(null);
+	const [orderId, setOrderId] = useState("");
 
 	useEffect(() => {
 		const handleCheckoutSuccess = async (sessionId) => {
+			const processedKey = `checkout_success_processed:${sessionId}`;
+			const cachedOrderKey = `checkout_success_order:${sessionId}`;
+			const alreadyProcessed = sessionStorage.getItem(processedKey) === "1";
+			const cachedOrderId = sessionStorage.getItem(cachedOrderKey) || "";
+
+			if (alreadyProcessed) {
+				if (cachedOrderId) {
+					setOrderId(cachedOrderId);
+				}
+				setIsProcessing(false);
+				return;
+			}
+
 			try {
-				await axios.post("/payments/checkout-success", {
+				const response = await axios.post("/payments/checkout-success", {
 					sessionId,
 				});
+				const resolvedOrderId = String(response.data?.orderId || "");
+				setOrderId(resolvedOrderId);
+				sessionStorage.setItem(processedKey, "1");
+				if (resolvedOrderId) {
+					sessionStorage.setItem(cachedOrderKey, resolvedOrderId);
+				}
 				clearCart();
 			} catch (error) {
 				console.log(error);
+				setError(error.response?.data?.message || "Failed to finalize order");
 			} finally {
 				setIsProcessing(false);
 			}
@@ -66,7 +87,9 @@ const PurchaseSuccessPage = () => {
 					<div className='bg-gray-700 rounded-lg p-4 mb-6'>
 						<div className='flex items-center justify-between mb-2'>
 							<span className='text-sm text-gray-400'>Order number</span>
-							<span className='text-sm font-semibold text-accent-400'>#12345</span>
+							<span className='text-sm font-semibold text-accent-400'>
+								{orderId ? `#${orderId}` : "Pending"}
+							</span>
 						</div>
 						<div className='flex items-center justify-between'>
 							<span className='text-sm text-gray-400'>Estimated delivery</span>
@@ -75,6 +98,13 @@ const PurchaseSuccessPage = () => {
 					</div>
 
 					<div className='space-y-4'>
+						<Link
+							to={'/orders'}
+							className='w-full bg-accent-600 hover:bg-accent-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center'
+						>
+							View My Orders
+							<ArrowRight className='ml-2' size={18} />
+						</Link>
 						<button
 							className='w-full bg-accent-600 hover:bg-accent-700 text-white font-bold py-2 px-4
              rounded-lg transition duration-300 flex items-center justify-center'

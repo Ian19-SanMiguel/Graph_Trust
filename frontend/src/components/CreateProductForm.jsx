@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { PlusCircle, Upload, Loader } from "lucide-react";
 import { useProductStore } from "../stores/useProductStore";
-
-const categories = ["jeans", "t-shirts", "shoes", "glasses", "jackets", "suits", "bags"];
+import { useUserStore } from "../stores/useUserStore";
 
 const CreateProductForm = () => {
 	const [newProduct, setNewProduct] = useState({
@@ -13,13 +12,26 @@ const CreateProductForm = () => {
 		category: "",
 		image: "",
 	});
+	const [newCategory, setNewCategory] = useState({ name: "", image: "" });
 
-	const { createProduct, loading } = useProductStore();
+	const { createProduct, createCategory, fetchCategories, categories, loading } = useProductStore();
+	const { user } = useUserStore();
+	const isAdmin = user?.role === "admin";
+
+	useEffect(() => {
+		fetchCategories();
+	}, [fetchCategories]);
 
 	const handleSubmit = async (e) => {
 		e.preventDefault();
+		const parsedPrice = Number.parseFloat(newProduct.price);
+
+		if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+			return;
+		}
+
 		try {
-			await createProduct(newProduct);
+			await createProduct({ ...newProduct, price: parsedPrice });
 			setNewProduct({ name: "", description: "", price: "", category: "", image: "" });
 		} catch {
 			console.log("error creating a product");
@@ -36,6 +48,33 @@ const CreateProductForm = () => {
 			};
 
 			reader.readAsDataURL(file); // base64
+		}
+	};
+
+	const handleCategoryImageChange = (e) => {
+		const file = e.target.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onloadend = () => {
+			setNewCategory((prev) => ({ ...prev, image: reader.result }));
+		};
+		reader.readAsDataURL(file);
+	};
+
+	const handleCreateCategory = async (e) => {
+		e.preventDefault();
+		if (!newCategory.name.trim() || !newCategory.image) {
+			return;
+		}
+
+		try {
+			const created = await createCategory({ name: newCategory.name, image: newCategory.image });
+			if (created?.slug) {
+				setNewProduct((prev) => ({ ...prev, category: created.slug }));
+			}
+			setNewCategory({ name: "", image: "" });
+		} catch {
+			// Errors are surfaced via toast in the store.
 		}
 	};
 
@@ -94,6 +133,7 @@ const CreateProductForm = () => {
 						value={newProduct.price}
 						onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
 						step='0.01'
+						min='0'
 						className='mt-1 block w-full bg-gray-700 border border-gray-600 rounded-md shadow-sm 
 					py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-500
 					 focus:border-accent-500'
@@ -117,12 +157,56 @@ const CreateProductForm = () => {
 					>
 						<option value=''>Select a category</option>
 						{categories.map((category) => (
-							<option key={category} value={category}>
-								{category}
+							<option key={category._id || category.slug} value={category.slug}>
+								{category.name}
 							</option>
 						))}
 					</select>
 				</div>
+
+				{isAdmin && (
+				<div className='rounded-lg border border-gray-700 bg-gray-900/40 p-4'>
+					<h3 className='mb-3 text-sm font-semibold uppercase tracking-[0.14em] text-accent-300'>
+						Add Category
+					</h3>
+					<div className='grid gap-3 md:grid-cols-[1fr_auto]'>
+						<input
+							type='text'
+							placeholder='Category name'
+							value={newCategory.name}
+							onChange={(e) => setNewCategory((prev) => ({ ...prev, name: e.target.value }))}
+							className='block w-full bg-gray-700 border border-gray-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-accent-500'
+						/>
+						<label
+							htmlFor='category-image'
+							className='cursor-pointer inline-flex items-center justify-center rounded-md border border-gray-600 bg-gray-700 px-3 py-2 text-sm font-medium text-gray-300 hover:bg-gray-600'
+						>
+							<Upload className='mr-2 h-4 w-4' />
+							Category Image
+						</label>
+						<input
+							type='file'
+							id='category-image'
+							className='sr-only'
+							accept='image/*'
+							onChange={handleCategoryImageChange}
+						/>
+					</div>
+					<div className='mt-3 flex items-center justify-between'>
+						<p className='text-xs text-gray-400'>
+							{newCategory.image ? "Category image selected" : "Upload an image for this category"}
+						</p>
+						<button
+							type='button'
+							onClick={handleCreateCategory}
+							disabled={loading || !newCategory.name.trim() || !newCategory.image}
+							className='rounded-md bg-accent-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-500 disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-400'
+						>
+							Create Category
+						</button>
+					</div>
+				</div>
+				)}
 
 				<div className='mt-1 flex items-center'>
 					<input type='file' id='image' className='sr-only' accept='image/*' onChange={handleImageChange} />
