@@ -16,10 +16,24 @@ export const seedHandler = async (req, res) => {
 
 export const clearProductsHandler = async (req, res) => {
   try {
-    // fetch all products and delete them
-    const products = await Product.find();
+    // Delete products created by current and legacy dev seeders.
+    const products = await Product.find({});
+    const seededProducts = products.filter((product) => {
+      const shopId = String(product?.shopId || "").trim().toLowerCase();
+      const seedTag = String(product?.seedTag || "").trim().toLowerCase();
+      const image = String(product?.image || "").trim().toLowerCase();
+
+      return (
+        Boolean(product?.isSeeded) ||
+        shopId.startsWith("seed-shop-") ||
+        seedTag.startsWith("dev-seeder") ||
+        image.includes("picsum.photos/seed/") ||
+        image.includes("loremflickr.com")
+      );
+    });
+
     let deleted = 0;
-    for (const p of products) {
+    for (const p of seededProducts) {
       if (p._id) {
         await Product.findByIdAndDelete(p._id);
         deleted++;

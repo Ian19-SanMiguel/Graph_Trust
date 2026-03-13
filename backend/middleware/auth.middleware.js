@@ -21,6 +21,12 @@ export const protectRoute = async (req, res, next) => {
 			// but also provide a sanitized plain object on req.userSafe for responses
 			const userWithoutPassword = user.toJSON();
 			delete userWithoutPassword.password;
+			if (!userWithoutPassword.hasSubmittedVerification) {
+				delete userWithoutPassword.trustScore;
+				delete userWithoutPassword.aiTrustScoringMode;
+				delete userWithoutPassword.aiTrustModelExists;
+				delete userWithoutPassword.aiTrustUpdatedAt;
+			}
 			req.user = user; // model instance
 			req.userSafe = userWithoutPassword; // sanitized plain object
 
@@ -58,21 +64,22 @@ export const sellerOrAdminRoute = (req, res, next) => {
 
 export const pendingOrHigherKycOrAdminRoute = (req, res, next) => {
 	const normalizedKycStatus = String(req.user?.kycStatus || "").trim().toLowerCase();
+	const hasSubmittedVerification = Boolean(req.user?.hasSubmittedVerification);
 	const hasPendingOrHigherKyc =
 		normalizedKycStatus === "pending" ||
 		normalizedKycStatus === "verified" ||
 		normalizedKycStatus === "approved";
 
-	if (req.user && (req.user.role === "admin" || hasPendingOrHigherKyc)) {
+	if (req.user && (req.user.role === "admin" || (hasSubmittedVerification && hasPendingOrHigherKyc))) {
 		next();
 	} else {
-		return res.status(403).json({ message: "Access denied - KYC pending or approved sellers or admin only" });
+		return res.status(403).json({ message: "Access denied - submit verification first" });
 	}
 };
 
 export const requireMfaForPrivilegedRoute = (req, res, next) => {
 	const role = String(req.user?.role || "").trim().toLowerCase();
-	const isPrivileged = role === "admin" || role === "seller";
+	const isPrivileged = role === "seller";
 
 	if (!isPrivileged) {
 		return next();
@@ -83,7 +90,7 @@ export const requireMfaForPrivilegedRoute = (req, res, next) => {
 	}
 
 	return res.status(403).json({
-		message: "MFA is required for admin and seller actions",
+		message: "MFA is required for seller actions",
 		mfaRequired: true,
 	});
 };

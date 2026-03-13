@@ -12,13 +12,13 @@ const Navbar = () => {
 	const { user, logout } = useUserStore();
 	const isAdmin = user?.role === "admin";
 	const isSeller = user?.role === "seller";
-	const mustEnableMfaForPrivileged = (isAdmin || isSeller) && !user?.mfaEnabled;
+	const mustEnableMfaForPrivileged = isSeller && !user?.mfaEnabled;
 	const normalizedKycStatus = String(user?.kycStatus || "").trim().toLowerCase();
+	const hasSubmittedVerification = Boolean(user?.hasSubmittedVerification);
 	const hasPendingOrHigherKyc =
 		normalizedKycStatus === "pending" || normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
-	const hasApprovedKyc = normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
 	const hasVerifiedBadge = isSeller && isVerifiedSeller;
-	const canOpenDashboard = (isAdmin || hasPendingOrHigherKyc) && !mustEnableMfaForPrivileged;
+	const canOpenDashboard = (isAdmin || (hasSubmittedVerification && hasPendingOrHigherKyc)) && !mustEnableMfaForPrivileged;
 	const { cart } = useCartStore();
 	const linkClassName = "text-gray-300 transition duration-300 ease-in-out";
 	const accountDisplayName = user?.name || user?.email || "Account";

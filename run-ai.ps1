@@ -1,5 +1,6 @@
 param(
-    [switch]$NoInstall
+    [switch]$NoInstall,
+    [switch]$Reload
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,6 +16,18 @@ Set-Location $aiDir
 
 if (-not $env:GRAPH_STORE_BACKEND) {
     $env:GRAPH_STORE_BACKEND = "firestore"
+}
+
+if (-not $env:AI_ALLOW_SQLITE_FALLBACK) {
+    $env:AI_ALLOW_SQLITE_FALLBACK = "false"
+}
+
+if (-not $env:AI_HOST) {
+    $env:AI_HOST = "127.0.0.1"
+}
+
+if (-not $env:AI_PORT) {
+    $env:AI_PORT = "8000"
 }
 
 if (-not $env:FIREBASE_PROJECT_ID) {
@@ -47,6 +60,17 @@ if (-not $env:FIREBASE_SERVICE_ACCOUNT_JSON) {
     }
 }
 
+if ($env:FIREBASE_CREDENTIALS_PATH -and -not [System.IO.Path]::IsPathRooted($env:FIREBASE_CREDENTIALS_PATH)) {
+    $env:FIREBASE_CREDENTIALS_PATH = Join-Path $root $env:FIREBASE_CREDENTIALS_PATH
+}
+
+if (-not $env:FIREBASE_CREDENTIALS_PATH) {
+    $defaultCredPath = Join-Path $root "backend\credentials\firebase-service-account.json"
+    if (Test-Path $defaultCredPath) {
+        $env:FIREBASE_CREDENTIALS_PATH = $defaultCredPath
+    }
+}
+
 if ($env:GRAPH_STORE_BACKEND -eq "firestore") {
     $hasInlineJson = -not [string]::IsNullOrWhiteSpace($env:FIREBASE_SERVICE_ACCOUNT_JSON)
     $hasCredPath = -not [string]::IsNullOrWhiteSpace($env:FIREBASE_CREDENTIALS_PATH)
@@ -67,7 +91,13 @@ You can place FIREBASE_CREDENTIALS_PATH in backend/.env and this script will aut
     }
 
     if ($hasCredPath -and -not (Test-Path $env:FIREBASE_CREDENTIALS_PATH)) {
-        throw "FIREBASE_CREDENTIALS_PATH does not exist: $($env:FIREBASE_CREDENTIALS_PATH)"
+        $defaultCredPath = Join-Path $root "backend\credentials\firebase-service-account.json"
+        if (Test-Path $defaultCredPath) {
+            $env:FIREBASE_CREDENTIALS_PATH = $defaultCredPath
+        }
+        else {
+            throw "FIREBASE_CREDENTIALS_PATH does not exist: $($env:FIREBASE_CREDENTIALS_PATH)"
+        }
     }
 
     if ($hasAdcPath -and -not (Test-Path $env:GOOGLE_APPLICATION_CREDENTIALS)) {
@@ -105,5 +135,11 @@ if (-not $NoInstall) {
     & $python -m pip install -r requirements.txt
 }
 
-Write-Host "Starting AI engine at http://127.0.0.1:8000 ..."
-& $python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+Write-Host "Starting AI engine at http://$($env:AI_HOST):$($env:AI_PORT) ..."
+
+$uvicornArgs = @("-m", "uvicorn", "main:app", "--host", $env:AI_HOST, "--port", $env:AI_PORT)
+if ($Reload) {
+    $uvicornArgs += "--reload"
+}
+
+& $python @uvicornArgs

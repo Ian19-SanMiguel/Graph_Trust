@@ -19,6 +19,7 @@ export class User {
         this.aiTrustScoringMode = data.aiTrustScoringMode || "";
         this.aiTrustModelExists = Boolean(data.aiTrustModelExists || false);
         this.aiTrustUpdatedAt = data.aiTrustUpdatedAt || null;
+        this.hasSubmittedVerification = Boolean(data.hasSubmittedVerification || false);
         this.deviceId = data.deviceId || "";
         this.mfaEnabled = Boolean(data.mfaEnabled || false);
         this.mfaSecret = data.mfaSecret || "";
@@ -49,6 +50,7 @@ export class User {
             aiTrustScoringMode: this.aiTrustScoringMode,
             aiTrustModelExists: this.aiTrustModelExists,
             aiTrustUpdatedAt: this.aiTrustUpdatedAt,
+            hasSubmittedVerification: this.hasSubmittedVerification,
             deviceId: this.deviceId,
             mfaEnabled: this.mfaEnabled,
             mfaSecret: this.mfaSecret,
@@ -83,6 +85,7 @@ export class User {
             aiTrustScoringMode: this.aiTrustScoringMode,
             aiTrustModelExists: this.aiTrustModelExists,
             aiTrustUpdatedAt: this.aiTrustUpdatedAt,
+            hasSubmittedVerification: this.hasSubmittedVerification,
             deviceId: this.deviceId,
             mfaEnabled: this.mfaEnabled,
             storefrontName: this.storefrontName,

@@ -29,12 +29,13 @@ function App() {
 	const { user, checkAuth, checkingAuth } = useUserStore();
 	const { getCartItems } = useCartStore();
 	const normalizedKycStatus = String(user?.kycStatus || "").trim().toLowerCase();
+	const hasSubmittedVerification = Boolean(user?.hasSubmittedVerification);
 	const hasPendingOrHigherKyc =
 		normalizedKycStatus === "pending" || normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
-	const hasApprovedKyc = normalizedKycStatus === "verified" || normalizedKycStatus === "approved";
 	const isPrivilegedUser = user?.role === "admin" || user?.role === "seller";
-	const mustEnableMfaForPrivileged = isPrivilegedUser && !user?.mfaEnabled;
-	const canAccessSellerHub = (user?.role === "admin" || hasPendingOrHigherKyc) && !mustEnableMfaForPrivileged;
+	const mustEnableMfaForPrivileged = user?.role === "seller" && !user?.mfaEnabled;
+	const canAccessSellerHub =
+		(user?.role === "admin" || (hasSubmittedVerification && hasPendingOrHigherKyc)) && !mustEnableMfaForPrivileged;
 	const isBuyer = Boolean(user && !isPrivilegedUser);
 	const shouldNudgeBuyerMfa = isBuyer && !user?.mfaEnabled;
 	const [dismissedMfaNudge, setDismissedMfaNudge] = useState(false);

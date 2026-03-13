@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import cors from "cors";
 import path from "path";
 
 import authRoutes from "./routes/auth.route.js";
@@ -25,6 +26,23 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const __dirname = path.resolve();
+
+const allowedOrigins = String(process.env.CLIENT_URL || "")
+	.split(",")
+	.map((origin) => origin.trim())
+	.filter(Boolean);
+
+app.use(
+	cors({
+		origin: (origin, callback) => {
+			if (!origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin)) {
+				return callback(null, true);
+			}
+			return callback(new Error("CORS not allowed"));
+		},
+		credentials: true,
+	})
+);
 
 app.use(express.json({ limit: "35mb" })); // allows you to parse the body of the request
 app.use(cookieParser());

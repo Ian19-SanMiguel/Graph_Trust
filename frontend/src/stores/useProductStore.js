@@ -47,7 +47,7 @@ export const useProductStore = create((set) => ({
 			set({ products: response.data.products, loading: false });
 		} catch (error) {
 			set({ error: "Failed to fetch products", loading: false });
-			toast.error(error.response?.data?.error || "Failed to fetch products");
+			toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to fetch products");
 		}
 	},
 	fetchMyProducts: async () => {
@@ -57,7 +57,7 @@ export const useProductStore = create((set) => ({
 			set({ products: response.data.products, loading: false });
 		} catch (error) {
 			set({ error: "Failed to fetch products", loading: false });
-			toast.error(error.response?.data?.error || "Failed to fetch your products");
+			toast.error(error.response?.data?.message || error.response?.data?.error || "Failed to fetch your products");
 		}
 	},
 	fetchProductsByCategory: async (category) => {

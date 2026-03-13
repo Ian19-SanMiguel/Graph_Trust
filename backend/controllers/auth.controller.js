@@ -7,23 +7,31 @@ import crypto from "crypto";
 
 const MFA_ISSUER = process.env.MFA_ISSUER || "GraphTrust";
 
-const buildAuthResponseUser = (user) => ({
-	_id: user._id,
-	name: user.name,
-	email: user.email,
-	role: user.role,
-	trustScore: user.trustScore,
-	aiTrustScoringMode: user.aiTrustScoringMode || "",
-	aiTrustModelExists: Boolean(user.aiTrustModelExists),
-	aiTrustUpdatedAt: user.aiTrustUpdatedAt || null,
-	kycStatus: user.kycStatus,
-	mfaEnabled: Boolean(user.mfaEnabled),
-	storefrontName: user.storefrontName || user.name || "Shop",
-	storefrontTagline: user.storefrontTagline || "",
-	storefrontDescription: user.storefrontDescription || "",
-	storefrontLogoUrl: user.storefrontLogoUrl || "",
-	storefrontBannerUrl: user.storefrontBannerUrl || "",
-});
+const buildAuthResponseUser = (user) => {
+	const hasSubmittedVerification = Boolean(user.hasSubmittedVerification);
+	return {
+		_id: user._id,
+		name: user.name,
+		email: user.email,
+		role: user.role,
+		...(hasSubmittedVerification
+			? {
+				trustScore: user.trustScore,
+				aiTrustScoringMode: user.aiTrustScoringMode || "",
+				aiTrustModelExists: Boolean(user.aiTrustModelExists),
+				aiTrustUpdatedAt: user.aiTrustUpdatedAt || null,
+			}
+			: {}),
+		hasSubmittedVerification,
+		kycStatus: user.kycStatus,
+		mfaEnabled: Boolean(user.mfaEnabled),
+		storefrontName: user.storefrontName || user.name || "Shop",
+		storefrontTagline: user.storefrontTagline || "",
+		storefrontDescription: user.storefrontDescription || "",
+		storefrontLogoUrl: user.storefrontLogoUrl || "",
+		storefrontBannerUrl: user.storefrontBannerUrl || "",
+	};
+};
 
 const sanitizeOtpToken = (token) => String(token || "").replace(/\s|-/g, "").trim();
 
@@ -44,16 +52,19 @@ const storeRefreshToken = async (userId, refreshToken) => {
 };
 
 const setCookies = (res, accessToken, refreshToken) => {
+	const isProduction = process.env.NODE_ENV === "production";
+	const sameSitePolicy = isProduction ? "none" : "strict";
+
 	res.cookie("accessToken", accessToken, {
 		httpOnly: true, // prevent XSS attacks, cross site scripting attack
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "strict", // prevents CSRF attack, cross-site request forgery attack
+		secure: isProduction,
+		sameSite: sameSitePolicy,
 		maxAge: 15 * 60 * 1000, // 15 minutes
 	});
 	res.cookie("refreshToken", refreshToken, {
 		httpOnly: true, // prevent XSS attacks, cross site scripting attack
-		secure: process.env.NODE_ENV === "production",
-		sameSite: "strict", // prevents CSRF attack, cross-site request forgery attack
+		secure: isProduction,
+		sameSite: sameSitePolicy,
 		maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 	});
 };
@@ -152,7 +163,7 @@ export const refreshToken = async (req, res) => {
 		res.cookie("accessToken", accessToken, {
 			httpOnly: true,
 			secure: process.env.NODE_ENV === "production",
-			sameSite: "strict",
+			sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
 			maxAge: 15 * 60 * 1000,
 		});
 

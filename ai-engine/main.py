@@ -7,6 +7,7 @@ import random
 import os
 import sqlite3
 import json
+import hashlib
 from datetime import datetime, timezone
 
 try:
@@ -38,7 +39,8 @@ app = FastAPI(title="GraphTrust API")
 marketplace_graph = nx.MultiDiGraph()
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "graphtrust.db")
-MODEL_PATH = os.path.join(os.path.dirname(__file__), "graphtrust_model.pkl")
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "models")
+GLOBAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "graphtrust_model.pkl")
 GRAPH_STORE_BACKEND = os.getenv("GRAPH_STORE_BACKEND", "firestore").strip().lower()
 AI_ALLOW_SQLITE_FALLBACK = os.getenv("AI_ALLOW_SQLITE_FALLBACK", "false").strip().lower() in {
     "1",
@@ -133,6 +135,16 @@ def init_firestore():
     graph_store_in_use = "firestore"
 
 
+def verify_firestore_access():
+    if firestore_db is None:
+        raise RuntimeError("Firestore client is not initialized")
+
+    # Force an authenticated read with short timeout so invalid credentials fail fast.
+    docs = firestore_db.collection(FIRESTORE_EDGES_COLLECTION).limit(1).stream(timeout=20)
+    for _ in docs:
+        break
+
+
 def init_graph_db():
     with _get_db_connection() as conn:
         cursor = conn.cursor()
@@ -219,7 +231,7 @@ def persist_alert(user_id: str, risk_score: float, reason: str):
 
 def load_alerts(limit: int = 50):
     if graph_store_in_use == "firestore" and firestore_db is not None:
-        docs = firestore_db.collection(FIRESTORE_ALERTS_COLLECTION).limit(limit).stream()
+        docs = firestore_db.collection(FIRESTORE_ALERTS_COLLECTION).limit(limit).stream(timeout=30)
         alerts = []
         for doc in docs:
             data = doc.to_dict() or {}
@@ -264,7 +276,7 @@ def load_graph_from_store():
     marketplace_graph.clear()
 
     if graph_store_in_use == "firestore" and firestore_db is not None:
-        docs = firestore_db.collection(FIRESTORE_EDGES_COLLECTION).stream()
+        docs = firestore_db.collection(FIRESTORE_EDGES_COLLECTION).stream(timeout=30)
         for doc in docs:
             data = doc.to_dict() or {}
             source = str(data.get("source", "")).strip()
@@ -307,20 +319,41 @@ def ml_dependencies_ready() -> bool:
     return np is not None and RandomForestRegressor is not None and joblib is not None
 
 
-def train_model_file() -> bool:
+def ensure_model_dir() -> None:
+    os.makedirs(MODEL_DIR, exist_ok=True)
+
+
+def _safe_user_model_name(user_id: str) -> str:
+    normalized = str(user_id or "").strip()
+    digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return f"trust_model_{digest}.pkl"
+
+
+def get_user_model_path(user_id: str) -> str:
+    ensure_model_dir()
+    return os.path.join(MODEL_DIR, _safe_user_model_name(user_id))
+
+
+def train_model_file(model_path: str = GLOBAL_MODEL_PATH, user_id: Optional[str] = None) -> bool:
     if not ml_dependencies_ready():
         return False
+
+    seed = 42
+    if user_id:
+        # Make each user's model deterministic but unique.
+        seed = int(hashlib.sha256(str(user_id).strip().encode("utf-8")).hexdigest()[:8], 16)
+    rng = random.Random(seed)
 
     x_train = []
     y_train = []
 
     for _ in range(250):
-        total_connections = random.randint(1, 80)
-        identity_connections = random.randint(0, 8)
-        shared_identity_count = random.randint(0, 5)
-        unique_counterparties = random.randint(0, 40)
-        low_rating_ratio = random.random()
-        report_signal_count = random.randint(0, 10)
+        total_connections = rng.randint(1, 80)
+        identity_connections = rng.randint(0, 8)
+        shared_identity_count = rng.randint(0, 5)
+        unique_counterparties = rng.randint(0, 40)
+        low_rating_ratio = rng.random()
+        report_signal_count = rng.randint(0, 10)
 
         risk = (
             shared_identity_count * 14
@@ -347,16 +380,21 @@ def train_model_file() -> bool:
 
     model = RandomForestRegressor(n_estimators=80, random_state=42)
     model.fit(x_train, y_train)
-    joblib.dump(model, MODEL_PATH)
+    joblib.dump(model, model_path)
     return True
 
 
-def ensure_ml_model_ready() -> bool:
-    if os.path.exists(MODEL_PATH) and ml_dependencies_ready():
+def ensure_ml_model_ready(user_id: Optional[str] = None) -> bool:
+    if not ml_dependencies_ready():
+        return False
+
+    model_path = GLOBAL_MODEL_PATH if user_id is None else get_user_model_path(user_id)
+
+    if os.path.exists(model_path):
         return True
 
-    trained = train_model_file()
-    return trained and os.path.exists(MODEL_PATH)
+    trained = train_model_file(model_path=model_path, user_id=user_id)
+    return trained and os.path.exists(model_path)
 
 
 @app.on_event("startup")
@@ -366,6 +404,7 @@ async def startup_event():
     if GRAPH_STORE_BACKEND == "firestore":
         try:
             init_firestore()
+            verify_firestore_access()
             print("Graph store initialized with Firestore")
         except Exception as error:
             if AI_ALLOW_SQLITE_FALLBACK:
@@ -375,8 +414,8 @@ async def startup_event():
             else:
                 raise RuntimeError(
                     "Firestore graph store initialization failed. "
-                    "Set FIREBASE_PROJECT_ID/credentials correctly, or explicitly opt into local mode with "
-                    "GRAPH_STORE_BACKEND=sqlite (or AI_ALLOW_SQLITE_FALLBACK=true)."
+                    "Set FIREBASE_PROJECT_ID/credentials correctly. "
+                    "Current startup is Firestore-only because AI_ALLOW_SQLITE_FALLBACK is disabled."
                 ) from error
 
     elif GRAPH_STORE_BACKEND == "sqlite":
@@ -388,14 +427,26 @@ async def startup_event():
             f"Unsupported GRAPH_STORE_BACKEND '{GRAPH_STORE_BACKEND}'. Use 'firestore' or 'sqlite'."
         )
 
-    load_graph_from_store()
+    try:
+        load_graph_from_store()
+    except Exception as error:
+        if graph_store_in_use == "firestore" and AI_ALLOW_SQLITE_FALLBACK:
+            graph_store_in_use = "sqlite"
+            init_graph_db()
+            load_graph_from_store()
+            print(f"Firestore graph load failed, fallback to SQLite enabled: {error}")
+        else:
+            raise RuntimeError(
+                "Graph store loading failed. "
+                "Firestore credentials or access are invalid. "
+                "SQLite fallback is disabled for this startup mode."
+            ) from error
 
-    if AI_TRUST_REQUIRE_ML and not AI_ALLOW_TRUST_FORMULA_FALLBACK:
+    if AI_TRUST_REQUIRE_ML:
         if not ensure_ml_model_ready():
             raise RuntimeError(
                 "AI trust scoring requires ML model, but model could not be prepared. "
-                "Install ML dependencies or explicitly allow formula fallback with "
-                "AI_ALLOW_TRUST_FORMULA_FALLBACK=true."
+                "Install ML dependencies and ensure model training can run."
             )
 
 
@@ -610,40 +661,22 @@ async def train_trust_model():
 def calculate_trust_score(user_id: str) -> float:
     features = extract_graph_features(user_id)
 
-    ml_ready = ensure_ml_model_ready()
+    user_model_path = get_user_model_path(user_id)
+    ml_ready = ensure_ml_model_ready(user_id)
     if not ml_ready:
-        if not AI_ALLOW_TRUST_FORMULA_FALLBACK:
-            raise RuntimeError(
-                "ML trust model is unavailable and formula fallback is disabled. "
-                "Train model via /admin/train-model or enable AI_ALLOW_TRUST_FORMULA_FALLBACK=true."
-            )
-
-        (
-            total_connections,
-            identity_connections,
-            shared_identity_count,
-            unique_counterparties,
-            low_rating_ratio,
-            report_signal_count,
-        ) = features
-        risk = (
-            shared_identity_count * 14
-            + max(0.0, identity_connections - 2) * 5
-            + (low_rating_ratio * 20)
-            + report_signal_count * 5
-            + max(0.0, 15 - unique_counterparties) * 1.2
-            + max(0.0, total_connections - 60) * 0.6
+        raise RuntimeError(
+            "ML trust model is unavailable for this user. "
+            "Trust score fallback is disabled."
         )
-        risk = max(0.0, min(100.0, risk))
-        return round(max(0.0, min(5.0, 5.0 - risk / 20.0)), 2)
 
-    model = joblib.load(MODEL_PATH)
+    model = joblib.load(user_model_path)
     predicted_score = model.predict([features])[0]
     return round(float(max(0.0, min(5.0, predicted_score))), 2)
 
 
-def get_trust_scoring_mode() -> str:
-    ml_ready = ml_dependencies_ready() and os.path.exists(MODEL_PATH)
+def get_trust_scoring_mode(user_id: Optional[str] = None) -> str:
+    model_path = GLOBAL_MODEL_PATH if user_id is None else get_user_model_path(user_id)
+    ml_ready = ml_dependencies_ready() and os.path.exists(model_path)
     return "ml" if ml_ready else "fallback"
 
 
@@ -925,11 +958,12 @@ async def submit_review(review: ReviewSubmit):
 async def recalculate_trust_score(payload: TrustRescoreRequest):
     risk_payload = calculate_risk_score(payload.user_id)
     alert = maybe_create_alert(payload.user_id, risk_payload)
+    user_model_path = get_user_model_path(payload.user_id)
     return {
         "user_id": payload.user_id,
-        "scoring_mode": get_trust_scoring_mode(),
-        "model_path": MODEL_PATH,
-        "model_exists": os.path.exists(MODEL_PATH),
+        "scoring_mode": get_trust_scoring_mode(payload.user_id),
+        "model_path": user_model_path,
+        "model_exists": os.path.exists(user_model_path),
         "trust_score": risk_payload["trust_score"],
         "risk_score": risk_payload["risk_score"],
         "risk_level": risk_payload["risk_level"],
@@ -1005,8 +1039,9 @@ async def graph_store_status():
         "trust_ml_required": AI_TRUST_REQUIRE_ML,
         "store": graph_store_in_use,
         "trust_scoring_mode": get_trust_scoring_mode(),
-        "model_path": MODEL_PATH,
-        "model_exists": os.path.exists(MODEL_PATH),
+        "global_model_path": GLOBAL_MODEL_PATH,
+        "global_model_exists": os.path.exists(GLOBAL_MODEL_PATH),
+        "user_model_dir": MODEL_DIR,
         "nodes": marketplace_graph.number_of_nodes(),
         "edges": marketplace_graph.number_of_edges(),
         "relation_counts": relation_counts,
@@ -1018,4 +1053,7 @@ async def graph_store_status():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.getenv("AI_HOST", "0.0.0.0")
+    port = int(os.getenv("AI_PORT", "8000"))
+    reload_enabled = os.getenv("AI_RELOAD", "false").strip().lower() in {"1", "true", "yes"}
+    uvicorn.run("main:app", host=host, port=port, reload=reload_enabled)

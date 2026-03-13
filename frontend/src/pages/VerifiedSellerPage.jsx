@@ -1,7 +1,7 @@
 import { CheckCircle, Shield } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import VerificationForm from "../components/VerificationForm";
 import axios from "../lib/axios";
 import { useUserStore } from "../stores/useUserStore";
@@ -10,30 +10,45 @@ const VerifiedSellerPage = () => {
     const [showVerificationForm, setShowVerificationForm] = useState(false);
     const [verificationStatus, setVerificationStatus] = useState("not_submitted");
     const { user } = useUserStore();
+    const hasRefreshedProfileRef = useRef(false);
+    const userId = String(user?._id || "");
     const needsMfaSetup = Boolean(user && !user.mfaEnabled);
     const isVerificationPending = verificationStatus === "pending";
     const isVerificationApproved = verificationStatus === "approved";
     const isVerificationRejected = verificationStatus === "rejected";
     const trustScoringMode = String(user?.aiTrustScoringMode || "").toLowerCase();
-    const trustSourceLabel = trustScoringMode === "ml" ? "AI model" : "fallback";
+    const hasSubmittedVerification = Boolean(user?.hasSubmittedVerification) || verificationStatus !== "not_submitted";
+    const hasFiniteTrustScore = Number.isFinite(Number(user?.trustScore));
+
+    useEffect(() => {
+        hasRefreshedProfileRef.current = false;
+    }, [userId]);
 
     useEffect(() => {
         const loadVerificationStatus = async () => {
-            if (!user) {
+            if (!userId) {
                 setVerificationStatus("not_submitted");
                 return;
             }
 
             try {
                 const response = await axios.get("/verifications/me");
-                setVerificationStatus(response.data?.status || "not_submitted");
-            } catch (error) {
+                const nextStatus = response.data?.status || "not_submitted";
+                setVerificationStatus(nextStatus);
+
+                // Refresh profile once so newly computed trust fields are reflected without creating an effect loop.
+                if (nextStatus === "approved" && !hasFiniteTrustScore && !hasRefreshedProfileRef.current) {
+                    hasRefreshedProfileRef.current = true;
+                    const profileResponse = await axios.get("/auth/profile");
+                    useUserStore.setState((prev) => ({ ...prev, user: profileResponse.data }));
+                }
+            } catch {
                 setVerificationStatus("not_submitted");
             }
         };
 
         loadVerificationStatus();
-    }, [user]);
+    }, [userId, hasFiniteTrustScore]);
 
     const isVerificationActionLocked = isVerificationPending || isVerificationApproved;
     const verificationActionLabel = isVerificationApproved
@@ -69,14 +84,14 @@ const VerifiedSellerPage = () => {
                     </p>
 
                     {/* --- AI TRUST SCORE BADGE --- */}
-                    {user && (
+                    {user && hasSubmittedVerification && hasFiniteTrustScore && (
                         <div className="mt-4 inline-flex items-center gap-2 bg-gray-800 border border-gray-600 rounded-full px-4 py-2">
                             <span className="text-gray-300 text-sm font-semibold">AI Trust Score:</span>
                             <span className={`text-lg font-bold ${user.trustScore >= 3.0 ? 'text-green-400' : 'text-yellow-400'}`}>
-                                {user.trustScore !== undefined ? user.trustScore.toFixed(1) : "0.0"} / 5.0
+                                {Number(user.trustScore).toFixed(1)} / 5.0
                             </span>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trustScoringMode === "ml" ? "bg-green-600/20 text-green-300" : "bg-yellow-600/20 text-yellow-300"}`}>
-                                {trustSourceLabel}
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${trustScoringMode === "ml" ? "bg-green-600/20 text-green-300" : "bg-gray-600/20 text-gray-300"}`}>
+                                {trustScoringMode === "ml" ? "AI model" : "pending model"}
                             </span>
                         </div>
                     )}
@@ -158,7 +173,7 @@ const VerifiedSellerPage = () => {
                                     </div>
 
                                     <p className='text-center text-sm lg:text-xs text-white mb-8 lg:mb-4'>
-                                        Takes 3-5 minutes. You'll get a Verified badge after approval
+                                        Takes 3-5 minutes. You&apos;ll get a Verified badge after approval
                                     </p>
 
                                     <motion.button

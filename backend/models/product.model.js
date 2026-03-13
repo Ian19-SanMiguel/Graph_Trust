@@ -15,6 +15,8 @@ export class Product {
 		this.shopId = data.shopId || "";
 		this.shopName = data.shopName || "";
 		this.isFeatured = data.isFeatured || false;
+		this.isSeeded = Boolean(data.isSeeded || false);
+		this.seedTag = data.seedTag || "";
 		this.createdAt = data.createdAt;
 		this.updatedAt = data.updatedAt;
 	}
@@ -31,6 +33,8 @@ export class Product {
 			shopId: this.shopId,
 			shopName: this.shopName,
 			isFeatured: this.isFeatured,
+			isSeeded: this.isSeeded,
+			seedTag: this.seedTag,
 			createdAt: this.createdAt || serverTimestamp(),
 			updatedAt: serverTimestamp(),
 		});
@@ -48,6 +52,8 @@ export class Product {
 			shopId: this.shopId,
 			shopName: this.shopName,
 			isFeatured: this.isFeatured,
+			isSeeded: this.isSeeded,
+			seedTag: this.seedTag,
 			createdAt: this.createdAt,
 			updatedAt: this.updatedAt,
 		};

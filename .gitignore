@@ -34,3 +34,10 @@ ai-engine/env/
 .pytest_cache/
 graphtrust_model.pkl
 
+# Firebase service account keys (local only)
+ecommerce-*-firebase-adminsdk-*.json
+
+
+ai-engine/models/trust_model_*.pkl
+backend/credentials/*.json
+

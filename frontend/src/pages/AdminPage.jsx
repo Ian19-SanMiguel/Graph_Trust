@@ -14,7 +14,7 @@ import { useProductStore } from "../stores/useProductStore";
 import { useUserStore } from "../stores/useUserStore";
 
 const AdminPage = () => {
-	const { fetchAllProducts } = useProductStore();
+	const { fetchAllProducts, fetchMyProducts } = useProductStore();
 	const { user } = useUserStore();
 	const isAdmin = user?.role === "admin";
 	const normalizedKycStatus = String(user?.kycStatus || "").trim().toLowerCase();
@@ -50,17 +50,21 @@ const AdminPage = () => {
 
 	useEffect(() => {
 		if (canManageInventory) {
-			fetchAllProducts();
+			if (isAdmin) {
+				fetchAllProducts();
+			} else {
+				fetchMyProducts();
+			}
 		}
-	}, [fetchAllProducts, canManageInventory]);
+	}, [fetchAllProducts, fetchMyProducts, canManageInventory, isAdmin]);
 
 	return (
 		<div className='min-h-screen relative overflow-hidden'>
 			<div className='relative z-10 container mx-auto px-4 py-16'>
-				{process.env.NODE_ENV === "development" && isAdmin && (
-					<div className='flex justify-center items-center mb-6 space-x-3'>
+				{import.meta.env.DEV && isAdmin && (
+					<div className='mb-6 flex flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:justify-center'>
 						<button
-							className='bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-md'
+							className='w-full rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 sm:w-auto'
 							onClick={async () => {
 								setSeeding(true);
 								setSeedResult(null);
@@ -79,12 +83,12 @@ const AdminPage = () => {
 						</button>
 
 						<button
-							className='bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-md'
+							className='w-full rounded-md bg-gray-700 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-600 sm:w-auto'
 							onClick={async () => {
-								if (!confirm('Delete ALL products? This cannot be undone.')) return;
+								if (!confirm('Delete fake seeded products only? This cannot be undone.')) return;
 								setSeedResult(null);
 								try {
-									const res = await fetch('/api/dev/clear-products', { method: 'POST' });
+									const res = await fetch('/api/dev/clear-fake-products', { method: 'POST' });
 									const json = await res.json();
 									setSeedResult(json);
 								} catch (err) {
@@ -92,12 +96,16 @@ const AdminPage = () => {
 								}
 							}}
 						>
-							Delete All Products (dev)
+							Delete Fake Products (dev)
 						</button>
 
 						{seedResult && (
-							<div className='ml-4 text-sm'>
-								{seedResult.success ? (seedResult.createdCount ? `${seedResult.createdCount} products created` : `${seedResult.deletedCount ?? 0} products deleted`) : `Error: ${seedResult.message}`}
+							<div className='w-full text-center text-sm sm:w-auto sm:text-left'>
+								{seedResult.success
+									? (seedResult.createdCount
+										? `${seedResult.createdCount} products created`
+										: `${seedResult.deletedCount ?? 0} fake products deleted`)
+									: `Error: ${seedResult.message}`}
 							</div>
 						)}
 					</div>
@@ -127,12 +135,12 @@ const AdminPage = () => {
 					</Link>
 				</div>
 
-				<div className='flex justify-center mb-8'>
+				<div className='mb-8 flex flex-wrap justify-center gap-2'>
 					{tabs.map((tab) => (
 						<button
 							key={tab.id}
 							onClick={() => setActiveTab(tab.id)}
-							className={`flex items-center px-4 py-2 mx-2 rounded-md transition-colors duration-200 ${
+							className={`flex min-w-[140px] items-center justify-center rounded-md px-3 py-2 text-sm transition-colors duration-200 sm:min-w-0 sm:px-4 ${
 								activeTab === tab.id
 									? "bg-accent-600 text-white"
 									: "bg-gray-700 text-gray-300 hover:bg-gray-600"

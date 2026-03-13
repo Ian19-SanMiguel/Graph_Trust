@@ -103,6 +103,26 @@ export const submitVerification = async (req, res) => {
 			reviewedAt: null,
 		});
 
+		const submittingUser = await User.findById(req.user._id);
+		if (submittingUser && submittingUser.role !== "admin" && !submittingUser.hasSubmittedVerification) {
+			submittingUser.hasSubmittedVerification = true;
+			await submittingUser.save();
+		}
+
+		try {
+			await sendKycGraphEvent({
+				userId: req.user._id,
+				identityMarkers: {
+					business: String(businessName || "").trim(),
+					contact: String(contactNumber || "").trim(),
+					nationality: String(nationality || "").trim(),
+				},
+			});
+			await recalculateAiTrustForUser(req.user._id);
+		} catch (aiError) {
+			console.log("AI trust update after verification submission failed:", aiError.message);
+		}
+
 		return res.status(201).json({
 			message: "Verification submitted successfully",
 			verification: {
@@ -142,6 +162,10 @@ export const getMyVerificationStatus = async (req, res) => {
 		const verifiedUser = await User.findById(req.user._id);
 		if (verifiedUser && verifiedUser.role !== "admin") {
 			let shouldSaveUser = false;
+			if (!verifiedUser.hasSubmittedVerification) {
+				verifiedUser.hasSubmittedVerification = true;
+				shouldSaveUser = true;
+			}
 			const normalizedBusinessName = String(verification.businessName || "").trim();
 			if (
 				normalizedBusinessName &&
@@ -162,9 +186,14 @@ export const getMyVerificationStatus = async (req, res) => {
 					shouldSaveUser = true;
 				}
 
-				if (!Number.isFinite(Number(verifiedUser.trustScore)) || Number(verifiedUser.trustScore) <= 0) {
-					verifiedUser.trustScore = 2.5;
-					shouldSaveUser = true;
+				const normalizedScoringMode = String(verifiedUser.aiTrustScoringMode || "").trim().toLowerCase();
+				const hasTrustScore = Number.isFinite(Number(verifiedUser.trustScore));
+				if (normalizedScoringMode !== "ml" || !hasTrustScore) {
+					try {
+						await recalculateAiTrustForUser(req.user._id);
+					} catch (aiError) {
+						console.log("AI trust refresh in getMyVerificationStatus failed:", aiError.message);
+					}
 				}
 			} else {
 				if (verifiedUser.role === "seller") {
@@ -289,11 +318,9 @@ export const updateVerificationStatus = async (req, res) => {
 				if (normalizedBusinessName) {
 					verifiedUser.storefrontName = normalizedBusinessName;
 				}
+				verifiedUser.hasSubmittedVerification = true;
 				verifiedUser.role = "seller";
 				verifiedUser.kycStatus = "Verified";
-				if (!Number.isFinite(Number(verifiedUser.trustScore)) || Number(verifiedUser.trustScore) <= 0) {
-					verifiedUser.trustScore = 2.5;
-				}
 				await verifiedUser.save();
 
 				try {
@@ -320,6 +347,7 @@ export const updateVerificationStatus = async (req, res) => {
 				if (verifiedUser.role === "seller") {
 					verifiedUser.role = "customer";
 				}
+				verifiedUser.hasSubmittedVerification = true;
 				verifiedUser.kycStatus = status === "rejected" ? "Rejected" : "Pending";
 				await verifiedUser.save();
 			}
